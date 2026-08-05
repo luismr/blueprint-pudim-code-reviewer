@@ -1,0 +1,33 @@
+# Example: add the "pudim-code-review" label to a PR to trigger a review.
+# auto_approve is false — APPROVE verdicts are posted as comment-only reviews.
+#
+# Requires repository secret: ANTHROPIC_API_KEY
+# Consumer repos: copy to .github/workflows/ and replace `uses: ./` with:
+#   uses: luismr/blueprint-pudim-code-reviewer@v1
+name: Pudim Code Review (labeled example)
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: github.event.label.name == 'pudim-code-review'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        with:
+          provider: anthropic
+          model: claude-sonnet-4-6
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          auto_approve: false
+          trigger_label: pudim-code-review
+          remove_trigger_label: changes_requested
