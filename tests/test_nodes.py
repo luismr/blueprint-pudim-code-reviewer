@@ -57,13 +57,19 @@ def test_review_node_applies_provider_suffix(monkeypatch, provider, expected_suf
     with patch("graph.nodes.build_model") as mock_build:
         mock_build.return_value.invoke.return_value = fake_response
 
-        state: ReviewState = {"diff": "some diff", "prompt": "Review this", "result": ""}
+        state: ReviewState = {
+            "diff": "some diff",
+            "prompt": "Review this",
+            "context": "Head commit SHA: abc123\n",
+            "result": "",
+        }
         result = review_node(state)
 
         invoked_prompt = mock_build.return_value.invoke.call_args[0][0]
         if expected_suffix:
             assert expected_suffix in invoked_prompt
         assert "some diff" in invoked_prompt
+        assert "Head commit SHA: abc123" in invoked_prompt
         assert result["result"] == "Review output"
 
 
@@ -78,7 +84,12 @@ def test_review_node_invokes_model_and_updates_state(monkeypatch):
     with patch("graph.nodes.build_model") as mock_build:
         mock_build.return_value.invoke.return_value = fake_response
 
-        state: ReviewState = {"diff": "some diff", "prompt": "Review this", "result": ""}
+        state: ReviewState = {
+            "diff": "some diff",
+            "prompt": "Review this",
+            "context": "Head commit SHA: abc123\n",
+            "result": "",
+        }
         result = review_node(state)
 
         assert result["result"] == "Looks good, one nit on naming."
