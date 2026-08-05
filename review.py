@@ -159,7 +159,11 @@ def approval_not_permitted(exc: GithubException) -> bool:
         if isinstance(errors, list)
         else str(payload)
     )
-    return "not permitted to approve" in combined.lower()
+    lower = combined.lower()
+    return (
+        "not permitted to approve" in lower
+        or "approve your own pull request" in lower
+    )
 
 
 def submit_pr_review(pr, body: str, event: str, commit, comments: list[dict[str, object]]):
@@ -190,8 +194,10 @@ def post_pull_request_review(
         except GithubException as exc:
             if current_event == "APPROVE" and approval_not_permitted(exc):
                 print(
-                    "::warning::GitHub token cannot approve pull requests; "
-                    "posting as COMMENT instead."
+                    "::warning::Cannot submit GitHub PR approval with this token "
+                    "(GITHUB_TOKEN is blocked in Actions, or the token owner is the PR author). "
+                    "Posting as COMMENT instead. Use a PAT from a separate bot account "
+                    "via github_token for real auto_approve."
                 )
                 return submit_pr_review(pr, body, "COMMENT", commit, inline_batch)
             raise

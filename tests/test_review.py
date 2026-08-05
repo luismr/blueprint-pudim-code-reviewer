@@ -104,6 +104,15 @@ def test_post_pull_request_review_reraises_when_no_comments_and_not_approval_err
         )
 
 
+def test_approval_not_permitted_detects_self_approval_block():
+    exc = GithubException(
+        422,
+        {"message": "Unprocessable Entity", "errors": ["Review Can not approve your own pull request"]},
+    )
+
+    assert approval_not_permitted(exc)
+
+
 def test_resolve_commit_sha_prefers_event_payload():
     pr = MagicMock()
     pr.head.sha = "from-pr"
@@ -382,7 +391,7 @@ def test_post_pull_request_review_falls_back_to_comment_when_approval_not_permit
     assert verdict == "APPROVE"
     assert pr.create_review.call_count == 2
     assert pr.create_review.call_args_list[1].kwargs["event"] == "COMMENT"
-    assert "cannot approve pull requests" in capsys.readouterr().out
+    assert "Cannot submit GitHub PR approval with this token" in capsys.readouterr().out
 
 
 def test_post_pull_request_review_falls_back_to_individual_comments(mock_gh, capsys):

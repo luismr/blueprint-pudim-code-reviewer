@@ -157,23 +157,27 @@ This repository uses **Option B** in its dogfood workflow
 ([`.github/workflows/pudim-code-review-labeled.yml`](.github/workflows/pudim-code-review-labeled.yml)):
 
 ```yaml
-# auto_approve: true, but GITHUB_TOKEN cannot approve PRs — the action
-# detects this and falls back to a comment-only review automatically.
-# For real approvals, use a PAT with pull-request write access.
+# auto_approve: true — requires a PAT from a separate bot account (not the PR author).
 auto_approve: true
-github_token: ${{ secrets.GITHUB_TOKEN }}   # falls back to comment-only
-# github_token: ${{ secrets.PUDIM_GITHUB_PAT }}  # real approvals
+github_token: ${{ secrets.PUDIM_GITHUB_PAT != '' && secrets.PUDIM_GITHUB_PAT || github.token }}
 ```
 
-`auto_approve: true` is **enabled for this repo's reviews** on purpose — it
-dogfoods the approve path and the automatic fallback when `GITHUB_TOKEN` is
-rejected. The job still succeeds; check the Actions log for the fallback warning.
+`auto_approve: true` is **enabled for this repo's reviews** on purpose. Two GitHub
+rules prevent automatic approval today:
+
+1. **`GITHUB_TOKEN` cannot approve PRs** in Actions (falls back to comment-only).
+2. **A PAT owned by the PR author cannot approve their own PR** — even with a PAT,
+   reviews on PRs you open yourself stay comment-only unless the token belongs to a
+   **separate bot account** with pull-request write access.
+
+Add repository secret **`PUDIM_GITHUB_PAT`** from a dedicated bot user to get real
+approvals. The dogfood workflow uses it automatically when present.
 
 | Option | `auto_approve` | Token | Result on APPROVE verdict |
 |---|---|---|---|
 | **A** (safer default) | `false` | `GITHUB_TOKEN` | Comment-only review |
-| **B** (this repo) | `true` | `GITHUB_TOKEN` | Comment-only review (automatic fallback + warning) |
-| **B + PAT** | `true` | PAT with PR write | Real GitHub PR approval |
+| **B** (this repo, no PAT yet) | `true` | `GITHUB_TOKEN` | Comment-only review (automatic fallback + warning) |
+| **B + bot PAT** | `true` | `PUDIM_GITHUB_PAT` (non-author account) | Real GitHub PR approval |
 
 Most consumer repos should start with **Option A** (`auto_approve: false`).
 Switch to **Option B with a PAT** when you want the bot to actually approve PRs.
