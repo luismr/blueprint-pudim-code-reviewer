@@ -149,6 +149,26 @@ def parse_auto_approve(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def approval_not_permitted(exc: GithubException) -> bool:
+    if exc.status != 422:
+        return False
+    payload = exc.data if isinstance(exc.data, dict) else {}
+    errors = payload.get("errors", [])
+    combined = (
+        " ".join(str(item) for item in errors)
+        if isinstance(errors, list)
+        else str(payload)
+    )
+    return "not permitted to approve" in combined.lower()
+
+
+def submit_pr_review(pr, body: str, event: str, commit, comments: list[dict[str, object]]):
+    kwargs = {"body": body, "event": event, "commit": commit}
+    if comments:
+        return pr.create_review(**kwargs, comments=comments)
+    return pr.create_review(**kwargs)
+
+
 def post_pull_request_review(
     pr,
     parsed: ParsedReview,
@@ -162,21 +182,28 @@ def post_pull_request_review(
     commit = get_review_commit(gh, repo_name, commit_sha)
     valid_comments = filter_valid_inline_comments(parsed.inline_comments, changed_files)
     comments = build_github_comments(valid_comments)
-    review_kwargs = {
-        "body": body,
-        "event": review_event(parsed.verdict, auto_approve),
-        "commit": commit,
-    }
+    event = review_event(parsed.verdict, auto_approve)
+
+    def submit_with_approval_fallback(current_event: str, inline_batch: list[dict[str, object]]):
+        try:
+            return submit_pr_review(pr, body, current_event, commit, inline_batch)
+        except GithubException as exc:
+            if current_event == "APPROVE" and approval_not_permitted(exc):
+                print(
+                    "::warning::GitHub token cannot approve pull requests; "
+                    "posting as COMMENT instead."
+                )
+                return submit_pr_review(pr, body, "COMMENT", commit, inline_batch)
+            raise
 
     try:
-        if comments:
-            pr.create_review(**review_kwargs, comments=comments)
-        else:
-            pr.create_review(**review_kwargs)
+        submit_with_approval_fallback(event, comments)
     except GithubException as exc:
+        if not comments:
+            raise
         print(f"::warning::Batch review failed, posting inline comments individually: {exc}")
         post_inline_comments(pr, valid_comments, commit_sha)
-        pr.create_review(**review_kwargs)
+        submit_with_approval_fallback(event, [])
 
     return parsed.verdict
 

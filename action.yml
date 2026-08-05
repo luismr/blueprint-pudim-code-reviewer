@@ -37,7 +37,7 @@ inputs:
     required: false
     default: "changes_requested"
   auto_approve:
-    description: "When true, submit APPROVE verdicts as GitHub PR approvals. When false (default), APPROVE verdicts are posted as COMMENT reviews only."
+    description: "When true, submit APPROVE verdicts as GitHub PR approvals. When false (default), APPROVE verdicts are posted as COMMENT reviews only. Note: the default GITHUB_TOKEN in Actions cannot approve PRs; use a PAT with pull-request write access for real approvals."
     required: false
     default: "false"
 

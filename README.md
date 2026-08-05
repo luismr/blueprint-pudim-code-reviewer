@@ -146,6 +146,11 @@ By default, `auto_approve` is `false`: an `APPROVE` verdict is posted as a
 comment-only review and does **not** approve the PR. Set `auto_approve: true`
 to submit a real GitHub approval when the verdict is `APPROVE`.
 
+**Note:** GitHub Actions' default `GITHUB_TOKEN` **cannot approve pull
+requests** — if `auto_approve: true` with the default token, the action posts a
+comment-only review instead and logs a warning. Use a personal access token (PAT)
+with pull-request write access for real approvals.
+
 ### Review every new PR
 
 Runs on every pull request when it is opened, updated, or reopened.

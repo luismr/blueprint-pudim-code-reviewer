@@ -1,5 +1,6 @@
 # Add the "pudim-code-review" label to a PR to trigger a review.
-# auto_approve is true — APPROVE verdicts are posted as GitHub approvals.
+# auto_approve is true, but GITHUB_TOKEN cannot approve PRs in Actions — the
+# action falls back to a comment-only review. Use a PAT for real approvals.
 #
 # Requires repository secret: ANTHROPIC_API_KEY
 name: Pudim Code Review (labeled)

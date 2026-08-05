@@ -1,12 +1,14 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
 from github import GithubException
 
 from graph.review_parser import InlineComment, ParsedReview
 from review import (
     REVIEW_MARKER,
     VERDICT_SUFFIX,
+    approval_not_permitted,
     build_graph,
     format_previous_reviews,
     format_pr_context,
@@ -60,6 +62,46 @@ def test_parse_auto_approve():
     assert parse_auto_approve("true") is True
     assert parse_auto_approve("1") is True
     assert parse_auto_approve("") is False
+
+
+def test_approval_not_permitted_detects_github_actions_restriction():
+    exc = GithubException(
+        422,
+        {"message": "Unprocessable Entity", "errors": ["GitHub Actions is not permitted to approve pull requests."]},
+    )
+
+    assert approval_not_permitted(exc)
+
+
+def test_approval_not_permitted_ignores_other_errors():
+    exc = GithubException(422, {"message": "batch failed", "errors": ["Path could not be resolved"]})
+
+    assert not approval_not_permitted(exc)
+
+
+def test_approval_not_permitted_ignores_non_422_status():
+    exc = GithubException(403, {"message": "Forbidden"})
+
+    assert not approval_not_permitted(exc)
+
+
+def test_post_pull_request_review_reraises_when_no_comments_and_not_approval_error(mock_gh):
+    pr = MagicMock()
+    fake_commit = MagicMock()
+    mock_gh.get_repo.return_value.get_commit.return_value = fake_commit
+    parsed = ParsedReview(overview="Summary", verdict="APPROVE", inline_comments=[])
+    pr.create_review.side_effect = GithubException(500, {"message": "server error"})
+
+    with pytest.raises(GithubException):
+        post_pull_request_review(
+            pr,
+            parsed,
+            "abc123",
+            mock_gh,
+            "luismr/some-repo",
+            [],
+            auto_approve=True,
+        )
 
 
 def test_resolve_commit_sha_prefers_event_payload():
@@ -307,6 +349,40 @@ def test_post_pull_request_review_auto_approves_when_enabled(mock_gh):
         event="APPROVE",
         commit=fake_commit,
     )
+
+
+def test_post_pull_request_review_falls_back_to_comment_when_approval_not_permitted(
+    mock_gh, capsys
+):
+    pr = MagicMock()
+    fake_commit = MagicMock()
+    mock_gh.get_repo.return_value.get_commit.return_value = fake_commit
+    parsed = ParsedReview(overview="Summary", verdict="APPROVE", inline_comments=[])
+    pr.create_review.side_effect = [
+        GithubException(
+            422,
+            {
+                "message": "Unprocessable Entity",
+                "errors": ["GitHub Actions is not permitted to approve pull requests."],
+            },
+        ),
+        None,
+    ]
+
+    verdict = post_pull_request_review(
+        pr,
+        parsed,
+        "abc123",
+        mock_gh,
+        "luismr/some-repo",
+        [],
+        auto_approve=True,
+    )
+
+    assert verdict == "APPROVE"
+    assert pr.create_review.call_count == 2
+    assert pr.create_review.call_args_list[1].kwargs["event"] == "COMMENT"
+    assert "cannot approve pull requests" in capsys.readouterr().out
 
 
 def test_post_pull_request_review_falls_back_to_individual_comments(mock_gh, capsys):
