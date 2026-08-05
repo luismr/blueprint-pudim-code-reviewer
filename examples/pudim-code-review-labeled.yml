@@ -1,8 +1,10 @@
 # Consumer template: copy to .github/workflows/pudim-code-review-labeled.yml
 # in your repo, then add the "pudim-code-review" label to a PR to trigger a review.
 #
-# auto_approve is false — APPROVE verdicts are posted as comment-only reviews.
-# GITHUB_TOKEN cannot approve PRs in Actions; use a PAT for real approvals.
+# auto_approve: true — APPROVE verdicts submit a GitHub approval.
+# GITHUB_TOKEN cannot approve PRs in Actions; the action falls back to a
+# comment-only review automatically. For real approvals, use a PAT:
+#   github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
 #
 # Requires repository secret: ANTHROPIC_API_KEY
 # This repo dogfoods the action from .github/workflows/pudim-code-review-labeled.yml
@@ -33,6 +35,6 @@ jobs:
           model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          auto_approve: false
+          auto_approve: true
           trigger_label: pudim-code-review
           remove_trigger_label: changes_requested

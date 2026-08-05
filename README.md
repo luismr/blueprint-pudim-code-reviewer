@@ -168,7 +168,7 @@ using `uses: ./` instead of the published action.
 | Setting | Recommendation |
 |---|---|
 | **Model** | `claude-sonnet-4-6` for nuanced, high-quality reviews. Use `claude-haiku-4-5` when cost or latency matters more than depth. |
-| **`auto_approve`** | `false` (default) for comment-only APPROVE verdicts. Set `true` only with a PAT — `GITHUB_TOKEN` cannot approve PRs. |
+| **`auto_approve`** | `true` in the labeled workflow examples — APPROVE verdicts submit a GitHub approval. With the default `GITHUB_TOKEN`, the action falls back to comment-only; use a PAT for real approvals. |
 | **`remove_trigger_label`** | `changes_requested` (default) removes the label after a changes-requested verdict so re-reviews are opt-in. Use `always` or `never` to change that behavior. |
 
 ### Review every new PR
@@ -237,6 +237,7 @@ jobs:
           model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          auto_approve: true
           additional_rules: |
             Treat missing observability on new endpoints as Major.
             Require rollback notes for production config changes.

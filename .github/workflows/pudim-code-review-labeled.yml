@@ -1,6 +1,8 @@
 # Dogfood workflow: add the "pudim-code-review" label to a PR to trigger a review.
-# auto_approve is false — GITHUB_TOKEN cannot approve PRs in Actions.
-# Use a PAT with pull-request write access for real approvals.
+# auto_approve: true — APPROVE verdicts submit a GitHub approval.
+# GITHUB_TOKEN cannot approve PRs in Actions; the action falls back to a
+# comment-only review automatically. For real approvals, use a PAT:
+#   github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
 #
 # Requires repository secret: ANTHROPIC_API_KEY
 # Consumer template: examples/pudim-code-review-labeled.yml
@@ -30,6 +32,6 @@ jobs:
           model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          auto_approve: false
+          auto_approve: true
           trigger_label: pudim-code-review
           remove_trigger_label: changes_requested
