@@ -1,36 +1,32 @@
 # Consumer template — copy to .github/workflows/pudim-code-review-labeled.yml
 #
-# WHAT THIS DOES
-#   Runs an AI code review when someone adds the "pudim-code-review" label to a
-#   pull request. Posts a PR review with an overview plus inline comments on
-#   changed lines. Removes the label after CHANGES_REQUESTED so re-reviews
-#   are opt-in (add the label again after fixing).
+# Add the "pudim-code-review" label to a PR to trigger a review.
+#
+# auto_approve (choose one):
+#
+#   Option A — comment-only APPROVE verdicts (recommended starting point):
+#     auto_approve: false
+#
+#   Option B — submit real GitHub approvals when the verdict is APPROVE:
+#     auto_approve: true
+#     GITHUB_TOKEN cannot approve PRs in Actions; the action detects this and
+#     falls back to a comment-only review automatically. For real approvals,
+#     use a PAT with pull-request write access:
+#       github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
+#
+# This repo (blueprint-pudim-code-reviewer) uses Option B in its dogfood
+# workflow (.github/workflows/pudim-code-review-labeled.yml, uses: ./).
+# Consumer repos should use the published action below:
+#   uses: luismr/blueprint-pudim-code-reviewer@v1
 #
 # QUICK START
 #   1. Copy this file to .github/workflows/ in your repo
-#   2. Add ANTHROPIC_API_KEY (or your provider key) as a repository secret
+#   2. Add ANTHROPIC_API_KEY as a repository secret
 #   3. Open a PR and add the "pudim-code-review" label
-#
-# THIS REPO vs YOUR REPO
-#   blueprint-pudim-code-reviewer dogfoods from .github/workflows/
-#   pudim-code-review-labeled.yml using `uses: ./` and auto_approve: true.
-#   Consumer repos should use the published action below:
-#     uses: luismr/blueprint-pudim-code-reviewer@v1
-#
-# auto_approve
-#   true  — APPROVE verdicts submit a GitHub PR approval (recommended with a PAT)
-#   false — APPROVE verdicts are comment-only (safer default for most teams)
-#
-#   GITHUB_TOKEN cannot approve PRs in Actions. With auto_approve: true and the
-#   default token, the action falls back to comment-only and logs a warning.
-#   For real approvals, create a PAT with pull-request write access and use:
-#     github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
 #
 # MODEL CHOICE
 #   claude-sonnet-4-6  — nuanced, high-quality reviews (recommended)
 #   claude-haiku-4-5   — faster and cheaper, good for quick feedback
-#   gpt-4.1            — OpenAI (set provider: openai, secret: OPENAI_API_KEY)
-#   gemini-2.5-pro     — Google (set provider: google_genai, secret: GOOGLE_API_KEY)
 #
 # remove_trigger_label
 #   changes_requested — remove label only when changes are requested (default)
@@ -62,13 +58,11 @@ jobs:
           model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Set false for comment-only APPROVE verdicts (most teams start here).
-          # Set true to submit real GitHub approvals — requires a PAT, not GITHUB_TOKEN.
+          # Option B — see header; falls back to comment-only with GITHUB_TOKEN.
           auto_approve: true
           trigger_label: pudim-code-review
           remove_trigger_label: changes_requested
           # Optional: append team-specific rules to the built-in review prompt.
           # additional_rules: |
           #   - Flag missing tests for auth changes
-          #   - Require rollback notes for production config changes
           # additional_rules_file: .github/pudim-review-rules.md

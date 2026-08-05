@@ -151,26 +151,34 @@ requests** — if `auto_approve: true` with the default token, the action posts 
 comment-only review instead and logs a warning. Use a personal access token (PAT)
 with pull-request write access for real approvals.
 
-#### `auto_approve` in this repo
+#### `auto_approve` in this repo (Option B)
 
-This repository **enables `auto_approve: true`** in its dogfood workflow
-([`.github/workflows/pudim-code-review-labeled.yml`](.github/workflows/pudim-code-review-labeled.yml))
-to exercise the full approve path during development. Because the workflow uses
-the default `GITHUB_TOKEN`, approvals fall back to comment-only until a PAT is
-configured:
+This repository uses **Option B** in its dogfood workflow
+([`.github/workflows/pudim-code-review-labeled.yml`](.github/workflows/pudim-code-review-labeled.yml)):
 
 ```yaml
-# Real GitHub approvals — add a PAT secret and wire it in:
-github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
+# auto_approve: true, but GITHUB_TOKEN cannot approve PRs — the action
+# detects this and falls back to a comment-only review automatically.
+# For real approvals, use a PAT with pull-request write access.
 auto_approve: true
+github_token: ${{ secrets.GITHUB_TOKEN }}   # falls back to comment-only
+# github_token: ${{ secrets.PUDIM_GITHUB_PAT }}  # real approvals
 ```
 
-| `auto_approve` | Token | Result on APPROVE verdict |
-|---|---|---|
-| `false` | `GITHUB_TOKEN` | Comment-only review |
-| `true` | `GITHUB_TOKEN` | Comment-only review (fallback + warning in Actions log) |
-| `true` | PAT with PR write | Real GitHub PR approval |
-| `false` | PAT | Comment-only review (approval not attempted) |
+`auto_approve: true` is **enabled for this repo's reviews** on purpose — it
+dogfoods the approve path and the automatic fallback when `GITHUB_TOKEN` is
+rejected. The job still succeeds; check the Actions log for the fallback warning.
+
+| Option | `auto_approve` | Token | Result on APPROVE verdict |
+|---|---|---|---|
+| **A** (safer default) | `false` | `GITHUB_TOKEN` | Comment-only review |
+| **B** (this repo) | `true` | `GITHUB_TOKEN` | Comment-only review (automatic fallback + warning) |
+| **B + PAT** | `true` | PAT with PR write | Real GitHub PR approval |
+
+Most consumer repos should start with **Option A** (`auto_approve: false`).
+Switch to **Option B with a PAT** when you want the bot to actually approve PRs.
+See [`examples/pudim-code-review-labeled.yml`](examples/pudim-code-review-labeled.yml)
+for both options documented in the template header.
 
 ### Choosing a workflow variant
 
@@ -182,15 +190,15 @@ auto_approve: true
 Copy the labeled example from [`examples/pudim-code-review-labeled.yml`](examples/pudim-code-review-labeled.yml).
 This repo dogfoods the same workflow from
 [`.github/workflows/pudim-code-review-labeled.yml`](.github/workflows/pudim-code-review-labeled.yml)
-using `uses: ./` instead of the published action, with **`auto_approve: true`**
-enabled for this repo's reviews.
+using `uses: ./` instead of the published action, with **Option B**
+(`auto_approve: true`) enabled for this repo's reviews.
 
 ### Model and settings
 
 | Setting | Recommendation |
 |---|---|
 | **Model** | `claude-sonnet-4-6` for nuanced, high-quality reviews. Use `claude-haiku-4-5` when cost or latency matters more than depth. |
-| **`auto_approve`** | `true` in this repo's labeled workflow (see table above). Most consumer repos start with `false` until a PAT is configured. |
+| **`auto_approve`** | **Option B** (`true`) in this repo's dogfood workflow — falls back to comment-only with `GITHUB_TOKEN`. Consumer repos: start with **Option A** (`false`) or use **Option B + PAT** for real approvals. |
 | **`remove_trigger_label`** | `changes_requested` (default) removes the label after a changes-requested verdict so re-reviews are opt-in. Use `always` or `never` to change that behavior. |
 | **`additional_rules`** | Inline markdown appended to the built-in prompt (e.g. team coding standards). |
 | **`additional_rules_file`** | Path to a rules file in the consumer repo (requires `actions/checkout`). |
@@ -237,7 +245,7 @@ Runs when a PR gets the label. When the review requests changes, the action
 removes the label automatically so the next review is opt-in: fix the code,
 then add `pudim-code-review` again when you are ready for another pass.
 
-**Minimal example** (comment-only approvals, default token):
+**Minimal example — Option A** (comment-only approvals, recommended for most repos):
 
 ```yaml
 # .github/workflows/pudim-code-review-labeled.yml
@@ -270,7 +278,21 @@ jobs:
           remove_trigger_label: changes_requested
 ```
 
-**With real GitHub approvals** (requires a PAT secret):
+**Option B — with `GITHUB_TOKEN`** (falls back to comment-only; same as this repo):
+
+```yaml
+      - uses: luismr/blueprint-pudim-code-reviewer@v1
+        with:
+          provider: anthropic
+          model: claude-sonnet-4-6
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          auto_approve: true
+          trigger_label: pudim-code-review
+          remove_trigger_label: changes_requested
+```
+
+**Option B — real GitHub approvals** (requires a PAT secret):
 
 ```yaml
       - uses: luismr/blueprint-pudim-code-reviewer@v1

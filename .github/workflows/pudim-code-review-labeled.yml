@@ -1,29 +1,22 @@
-# Dogfood workflow for blueprint-pudim-code-reviewer.
+# Add the "pudim-code-review" label to a PR to trigger a review.
+#
+# auto_approve: true — enabled for this repo's reviews (intentional dogfooding).
+# GITHUB_TOKEN cannot approve PRs in Actions; the action detects this and falls
+# back to a comment-only review automatically. For real approvals, use a PAT:
+#   github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
+#
+# Requires repository secret: ANTHROPIC_API_KEY
+# Consumer template: examples/pudim-code-review-labeled.yml
 #
 # How to trigger:
 #   1. Open a pull request
 #   2. Add the "pudim-code-review" label
-#   3. The action runs and posts a structured review (overview + inline comments)
-#
-# auto_approve is ENABLED for this repo's reviews — when the model verdict is
-# APPROVE, the action attempts to submit a real GitHub PR approval (not just a
-# comment). This is intentional dogfooding of the auto-approve feature.
-#
-# GITHUB_TOKEN limitation:
-#   GitHub Actions blocks the default GITHUB_TOKEN from approving PRs. The action
-#   detects that 422 error and falls back to a comment-only review automatically
-#   (the job still succeeds). To get real approvals in this repo, add a PAT secret
-#   and replace github_token below:
-#     github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
+#   3. The action posts a structured review (overview + inline comments)
 #
 # Re-review loop:
 #   After CHANGES_REQUESTED, the label is removed automatically. Fix the code,
-#   then re-add "pudim-code-review" when you want another pass. Prior reviews
-#   from this action are included in context so follow-up reviews reference
-#   earlier feedback.
-#
-# Requires repository secret: ANTHROPIC_API_KEY
-# Consumer template: examples/pudim-code-review-labeled.yml
+#   then re-add "pudim-code-review" for another pass. Prior reviews from this
+#   action are included in context for follow-up feedback.
 name: Pudim Code Review (labeled)
 
 on:
@@ -45,12 +38,12 @@ jobs:
       - uses: ./
         with:
           provider: anthropic
-          # Sonnet: best quality for code review (default in this repo).
-          # Haiku: faster/cheaper — swap to claude-haiku-4-5 for quick feedback.
+          # Use sonnet for nuanced, high-quality code reviews.
+          # Haiku is faster and cheaper but less suitable for complex review guidance.
           model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Enabled for this repo — see header comment for GITHUB_TOKEN vs PAT.
+          # auto_approve: true — see header; falls back to comment-only with GITHUB_TOKEN.
           auto_approve: true
           trigger_label: pudim-code-review
           remove_trigger_label: changes_requested
