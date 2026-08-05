@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-from github import Github, GithubException
+from github import Auth, Github, GithubException
 from langgraph.graph import END, StateGraph
 
 from graph.nodes import review_node
@@ -16,6 +16,8 @@ from graph.review_parser import (
     review_event,
 )
 from graph.state import ReviewState
+
+REVIEW_MARKER = "## Blueprint Pudim Code Review"
 
 VERDICT_SUFFIX = (
     "\n\nEnd your review with a final line in this exact format: "
@@ -77,6 +79,30 @@ def format_pr_context(pr, commit_sha: str, changed_files: list[str]) -> str:
         f"Head commit SHA: {commit_sha}\n"
         f"Changed files:\n{files_list}\n"
     )
+
+
+def get_previous_reviews(pr) -> list:
+    return [
+        review
+        for review in pr.get_reviews()
+        if REVIEW_MARKER in (review.body or "")
+    ]
+
+
+def format_previous_reviews(reviews: list) -> str:
+    if not reviews:
+        return "Previous reviews from this action: none\n"
+
+    parts = ["Previous reviews from this action:"]
+    for index, review in enumerate(reviews, start=1):
+        state = review.state or "UNKNOWN"
+        commit = (review.commit_id or "unknown")[:7]
+        submitted = review.submitted_at.isoformat() if review.submitted_at else "unknown"
+        body = review.body or ""
+        parts.append(
+            f"\n--- Review #{index} ({state}, commit {commit}, {submitted}) ---\n{body}"
+        )
+    return "\n".join(parts) + "\n"
 
 
 def get_pr_diff(gh: Github, repo_name: str, pr_number: int):
@@ -195,7 +221,7 @@ def write_github_output(review_text: str, commit_sha: str) -> None:
 
 
 def main():
-    gh = Github(os.environ["GITHUB_TOKEN"])
+    gh = Github(auth=Auth.Token(os.environ["GITHUB_TOKEN"]))
     repo_name = os.environ["GITHUB_REPOSITORY"]
     event_path = os.environ["GITHUB_EVENT_PATH"]
 
@@ -206,6 +232,7 @@ def main():
     diff, pr, changed_files = get_pr_diff(gh, repo_name, pr_number)
     commit_sha = resolve_commit_sha(event, pr)
     context = format_pr_context(pr, commit_sha, changed_files)
+    context = f"{context}\n{format_previous_reviews(get_previous_reviews(pr))}"
     prompt = load_prompt()
 
     trigger_label = os.environ.get("TRIGGER_LABEL", "")

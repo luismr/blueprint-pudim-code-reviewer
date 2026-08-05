@@ -1,5 +1,5 @@
 # Add the "pudim-code-review" label to a PR to trigger a review.
-# auto_approve is false — APPROVE verdicts are posted as comment-only reviews.
+# auto_approve is true — APPROVE verdicts are posted as GitHub approvals.
 #
 # Requires repository secret: ANTHROPIC_API_KEY
 name: Pudim Code Review (labeled)
@@ -26,6 +26,6 @@ jobs:
           model: claude-haiku-4-5
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          auto_approve: false
+          auto_approve: true
           trigger_label: pudim-code-review
           remove_trigger_label: changes_requested
