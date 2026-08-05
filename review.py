@@ -11,6 +11,7 @@ from graph.review_parser import (
     InlineComment,
     ParsedReview,
     build_github_comments,
+    filter_valid_inline_comments,
     parse_review_output,
     review_event,
 )
@@ -66,21 +67,29 @@ def resolve_commit_sha(event: dict, pr) -> str:
     return pr.head.sha
 
 
-def format_pr_context(pr, commit_sha: str) -> str:
+def format_pr_context(pr, commit_sha: str, changed_files: list[str]) -> str:
+    files_list = "\n".join(f"- {path}" for path in changed_files)
     return (
         f"PR number: {pr.number}\n"
         f"Title: {pr.title}\n"
         f"Head branch: {pr.head.ref}\n"
         f"Base branch: {pr.base.ref}\n"
         f"Head commit SHA: {commit_sha}\n"
+        f"Changed files:\n{files_list}\n"
     )
 
 
 def get_pr_diff(gh: Github, repo_name: str, pr_number: int):
     repo = gh.get_repo(repo_name)
     pr = repo.get_pull(pr_number)
-    diff = "\n".join(f.patch or "" for f in pr.get_files())
-    return diff, pr
+    changed_files: list[str] = []
+    parts: list[str] = []
+    for file in pr.get_files():
+        changed_files.append(file.filename)
+        patch = file.patch or "(no patch)"
+        parts.append(f"### File: {file.filename}\n{patch}")
+    diff = "\n\n".join(parts)
+    return diff, pr, changed_files
 
 
 def get_review_commit(gh: Github, repo_name: str, commit_sha: str):
@@ -120,11 +129,13 @@ def post_pull_request_review(
     commit_sha: str,
     gh: Github,
     repo_name: str,
+    changed_files: list[str],
     auto_approve: bool = False,
 ) -> str:
     body = f"## Blueprint Pudim Code Review\n\n{parsed.overview}"
     commit = get_review_commit(gh, repo_name, commit_sha)
-    comments = build_github_comments(parsed.inline_comments)
+    valid_comments = filter_valid_inline_comments(parsed.inline_comments, changed_files)
+    comments = build_github_comments(valid_comments)
     review_kwargs = {
         "body": body,
         "event": review_event(parsed.verdict, auto_approve),
@@ -138,7 +149,7 @@ def post_pull_request_review(
             pr.create_review(**review_kwargs)
     except GithubException as exc:
         print(f"::warning::Batch review failed, posting inline comments individually: {exc}")
-        post_inline_comments(pr, parsed.inline_comments, commit_sha)
+        post_inline_comments(pr, valid_comments, commit_sha)
         pr.create_review(**review_kwargs)
 
     return parsed.verdict
@@ -155,12 +166,19 @@ def publish_review(
     commit_sha: str,
     gh: Github,
     repo_name: str,
+    changed_files: list[str],
     auto_approve: bool = False,
 ) -> str:
     parsed = parse_review_output(review_text)
     if parsed:
         return post_pull_request_review(
-            pr, parsed, commit_sha, gh, repo_name, auto_approve=auto_approve
+            pr,
+            parsed,
+            commit_sha,
+            gh,
+            repo_name,
+            changed_files,
+            auto_approve=auto_approve,
         )
     post_issue_comment(pr, review_text)
     return review_text
@@ -185,9 +203,9 @@ def main():
         event = json.load(handle)
     pr_number = event["number"]
 
-    diff, pr = get_pr_diff(gh, repo_name, pr_number)
+    diff, pr, changed_files = get_pr_diff(gh, repo_name, pr_number)
     commit_sha = resolve_commit_sha(event, pr)
-    context = format_pr_context(pr, commit_sha)
+    context = format_pr_context(pr, commit_sha, changed_files)
     prompt = load_prompt()
 
     trigger_label = os.environ.get("TRIGGER_LABEL", "")
@@ -200,7 +218,7 @@ def main():
     auto_approve = parse_auto_approve(os.environ.get("AUTO_APPROVE", "false"))
 
     label_decision_text = publish_review(
-        pr, review_text, commit_sha, gh, repo_name, auto_approve=auto_approve
+        pr, review_text, commit_sha, gh, repo_name, changed_files, auto_approve=auto_approve
     )
 
     remove_mode = os.environ.get("REMOVE_TRIGGER_LABEL", "changes_requested")

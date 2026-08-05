@@ -91,7 +91,7 @@ Do not add prose before or after the JSON.
 - `inline_comments` (array, required) — one entry per actionable finding tied to a changed line in the diff. Use an empty array when there are no line-specific findings.
 
 **Inline comment rules**
-- `path` — file path exactly as it appears in the diff.
+- `path` — must exactly match a path from the **Changed files** list in PR context (same as the `### File:` headers in the diff).
 - `line` — the **new-file line number** (right side of the diff) for the changed line being commented on. Must refer to a line present in the diff.
 - `body` — markdown with severity emoji + level, What/Why/How, and an optional fenced fix snippet. No invented files or line numbers.
 

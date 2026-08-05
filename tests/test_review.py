@@ -81,13 +81,19 @@ def test_format_pr_context():
     pr.head.ref = "feature/widget"
     pr.base.ref = "main"
 
-    context = format_pr_context(pr, "abc123def")
+    context = format_pr_context(
+        pr,
+        "abc123def",
+        [".github/workflows/pudim-code-review-labeled.yml"],
+    )
 
     assert "PR number: 42" in context
     assert "Title: Add widget" in context
     assert "Head branch: feature/widget" in context
     assert "Base branch: main" in context
     assert "Head commit SHA: abc123def" in context
+    assert "Changed files:" in context
+    assert "- .github/workflows/pudim-code-review-labeled.yml" in context
 
 
 def test_get_review_commit(mock_gh):
@@ -121,14 +127,15 @@ def test_remove_trigger_label_ignores_missing_label(mock_gh):
 
 def test_get_pr_diff_joins_patches(mock_gh):
     pr = MagicMock()
-    file_a = MagicMock(patch="diff a")
-    file_b = MagicMock(patch=None)
+    file_a = MagicMock(filename="src/a.py", patch="diff a")
+    file_b = MagicMock(filename="src/b.py", patch=None)
     pr.get_files.return_value = [file_a, file_b]
     mock_gh.get_repo.return_value.get_pull.return_value = pr
 
-    diff, returned_pr = get_pr_diff(mock_gh, "luismr/some-repo", 42)
+    diff, returned_pr, changed_files = get_pr_diff(mock_gh, "luismr/some-repo", 42)
 
-    assert diff == "diff a\n"
+    assert diff == "### File: src/a.py\ndiff a\n\n### File: src/b.py\n(no patch)"
+    assert changed_files == ["src/a.py", "src/b.py"]
     assert returned_pr is pr
     mock_gh.get_repo.assert_called_once_with("luismr/some-repo")
     mock_gh.get_repo.return_value.get_pull.assert_called_once_with(42)
@@ -174,7 +181,14 @@ def test_post_pull_request_review_with_inline_comments(mock_gh):
         inline_comments=[InlineComment(path="src/a.py", line=4, body="Fix this")],
     )
 
-    verdict = post_pull_request_review(pr, parsed, "abc123", mock_gh, "luismr/some-repo")
+    verdict = post_pull_request_review(
+        pr,
+        parsed,
+        "abc123",
+        mock_gh,
+        "luismr/some-repo",
+        ["src/a.py"],
+    )
 
     assert verdict == "CHANGES_REQUESTED"
     pr.create_review.assert_called_once_with(
@@ -185,6 +199,35 @@ def test_post_pull_request_review_with_inline_comments(mock_gh):
     )
 
 
+def test_post_pull_request_review_filters_unknown_paths(mock_gh, capsys):
+    pr = MagicMock()
+    fake_commit = MagicMock()
+    mock_gh.get_repo.return_value.get_commit.return_value = fake_commit
+    parsed = ParsedReview(
+        overview="Summary",
+        verdict="CHANGES_REQUESTED",
+        inline_comments=[
+            InlineComment(path="wrong/path.yml", line=4, body="Fix this"),
+        ],
+    )
+
+    post_pull_request_review(
+        pr,
+        parsed,
+        "abc123",
+        mock_gh,
+        "luismr/some-repo",
+        [".github/workflows/pudim-code-review-labeled.yml"],
+    )
+
+    pr.create_review.assert_called_once_with(
+        body="## Blueprint Pudim Code Review\n\nSummary",
+        event="REQUEST_CHANGES",
+        commit=fake_commit,
+    )
+    assert "Skipping inline comment with unknown path" in capsys.readouterr().out
+
+
 def test_post_pull_request_review_without_inline_comments(mock_gh):
     pr = MagicMock()
     fake_commit = MagicMock()
@@ -192,7 +235,13 @@ def test_post_pull_request_review_without_inline_comments(mock_gh):
     parsed = ParsedReview(overview="Summary", verdict="APPROVE", inline_comments=[])
 
     verdict = post_pull_request_review(
-        pr, parsed, "abc123", mock_gh, "luismr/some-repo", auto_approve=False
+        pr,
+        parsed,
+        "abc123",
+        mock_gh,
+        "luismr/some-repo",
+        [],
+        auto_approve=False,
     )
 
     assert verdict == "APPROVE"
@@ -210,7 +259,13 @@ def test_post_pull_request_review_auto_approves_when_enabled(mock_gh):
     parsed = ParsedReview(overview="Summary", verdict="APPROVE", inline_comments=[])
 
     post_pull_request_review(
-        pr, parsed, "abc123", mock_gh, "luismr/some-repo", auto_approve=True
+        pr,
+        parsed,
+        "abc123",
+        mock_gh,
+        "luismr/some-repo",
+        [".github/workflows/pudim-code-review-labeled.yml"],
+        auto_approve=True,
     )
 
     pr.create_review.assert_called_once_with(
@@ -234,7 +289,14 @@ def test_post_pull_request_review_falls_back_to_individual_comments(mock_gh, cap
         None,
     ]
 
-    verdict = post_pull_request_review(pr, parsed, "abc123", mock_gh, "luismr/some-repo")
+    verdict = post_pull_request_review(
+        pr,
+        parsed,
+        "abc123",
+        mock_gh,
+        "luismr/some-repo",
+        ["src/a.py"],
+    )
 
     assert verdict == "CHANGES_REQUESTED"
     pr.create_review_comment.assert_called_once_with(
@@ -265,7 +327,9 @@ def test_publish_review_uses_structured_output(mock_gh):
     }
 
     with patch("review.post_pull_request_review", return_value="APPROVE") as mock_post:
-        result = publish_review(pr, json.dumps(payload), "abc123", mock_gh, "luismr/some-repo")
+        result = publish_review(
+            pr, json.dumps(payload), "abc123", mock_gh, "luismr/some-repo", []
+        )
 
     assert result == "APPROVE"
     mock_post.assert_called_once()
@@ -275,7 +339,9 @@ def test_publish_review_uses_structured_output(mock_gh):
 def test_publish_review_falls_back_to_issue_comment():
     pr = MagicMock()
 
-    result = publish_review(pr, "Plain text review", "abc123", MagicMock(), "luismr/some-repo")
+    result = publish_review(
+        pr, "Plain text review", "abc123", MagicMock(), "luismr/some-repo", []
+    )
 
     assert result == "Plain text review"
     pr.create_issue_comment.assert_called_once()
@@ -326,7 +392,7 @@ def test_main_posts_structured_review(monkeypatch, tmp_path):
          patch("review.build_graph") as mock_build_graph, \
          patch("review.publish_review") as mock_publish_review:
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {"result": structured}
         mock_publish_review.return_value = "APPROVE"
 
@@ -341,6 +407,7 @@ def test_main_posts_structured_review(monkeypatch, tmp_path):
             "event-sha",
             mock_github_cls.return_value,
             "luismr/some-repo",
+            ["src/a.py"],
             auto_approve=False,
         )
 
@@ -366,7 +433,7 @@ def test_main_posts_comment_without_output_file(monkeypatch, tmp_path):
          patch("review.get_pr_diff") as mock_get_diff, \
          patch("review.build_graph") as mock_build_graph:
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {"result": "All good."}
 
         main()
@@ -410,7 +477,7 @@ def test_main_removes_trigger_label_when_changes_requested(monkeypatch, tmp_path
          patch("review.build_graph") as mock_build_graph, \
          patch("review.post_pull_request_review", return_value="CHANGES_REQUESTED"):
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {"result": structured}
         mock_github_cls.return_value.get_repo.return_value.get_issue.return_value = fake_issue
 
@@ -451,7 +518,7 @@ def test_main_keeps_trigger_label_when_approved(monkeypatch, tmp_path):
          patch("review.build_graph") as mock_build_graph, \
          patch("review.post_pull_request_review", return_value="APPROVE"):
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {"result": structured}
         mock_github_cls.return_value.get_repo.return_value.get_issue.return_value = fake_issue
 
@@ -484,7 +551,7 @@ def test_main_removes_trigger_label_when_mode_is_always(monkeypatch, tmp_path):
          patch("review.build_graph") as mock_build_graph, \
          patch("review.post_pull_request_review", return_value="APPROVE"):
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {
             "result": "All good.\nVERDICT: APPROVE",
         }
@@ -519,7 +586,7 @@ def test_main_keeps_trigger_label_when_mode_is_never(monkeypatch, tmp_path):
          patch("review.build_graph") as mock_build_graph, \
          patch("review.post_pull_request_review", return_value="CHANGES_REQUESTED"):
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {
             "result": "Fix the tests.\nVERDICT: CHANGES_REQUESTED",
         }
@@ -553,7 +620,7 @@ def test_main_appends_verdict_suffix_when_trigger_label_set(monkeypatch, tmp_pat
          patch("review.build_graph") as mock_build_graph, \
          patch("review.publish_review", return_value="Done."):
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {"result": "Done."}
 
         main()
@@ -585,7 +652,7 @@ def test_main_writes_github_output_when_present(monkeypatch, tmp_path):
          patch("review.get_pr_diff") as mock_get_diff, \
          patch("review.build_graph") as mock_build_graph:
 
-        mock_get_diff.return_value = ("some diff", fake_pr)
+        mock_get_diff.return_value = ("some diff", fake_pr, ["src/a.py"])
         mock_build_graph.return_value.invoke.return_value = {"result": "Fine."}
 
         main()

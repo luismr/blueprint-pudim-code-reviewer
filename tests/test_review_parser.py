@@ -6,6 +6,7 @@ from graph.review_parser import (
     InlineComment,
     ParsedReview,
     build_github_comments,
+    filter_valid_inline_comments,
     parse_review_output,
     review_event,
 )
@@ -118,3 +119,18 @@ def test_build_github_comments():
         {"path": "a.py", "line": 1, "body": "one"},
         {"path": "b.py", "line": 2, "body": "two"},
     ]
+
+
+def test_filter_valid_inline_comments_keeps_known_paths(capsys):
+    comments = [
+        InlineComment(path="src/a.py", line=1, body="one"),
+        InlineComment(path="missing.py", line=2, body="two"),
+    ]
+
+    valid = filter_valid_inline_comments(
+        comments,
+        [".github/workflows/pudim-code-review-labeled.yml", "src/a.py"],
+    )
+
+    assert valid == [InlineComment(path="src/a.py", line=1, body="one")]
+    assert "Skipping inline comment with unknown path" in capsys.readouterr().out

@@ -85,6 +85,23 @@ def review_event(verdict: str, auto_approve: bool = False) -> str:
     return "REQUEST_CHANGES"
 
 
+def filter_valid_inline_comments(
+    comments: list[InlineComment],
+    changed_files: list[str],
+) -> list[InlineComment]:
+    valid_paths = set(changed_files)
+    valid: list[InlineComment] = []
+    for comment in comments:
+        if comment.path in valid_paths:
+            valid.append(comment)
+        else:
+            print(
+                f"::warning::Skipping inline comment with unknown path "
+                f"{comment.path!r}; changed files: {', '.join(changed_files)}"
+            )
+    return valid
+
+
 def build_github_comments(comments: list[InlineComment]) -> list[dict[str, object]]:
     return [
         {"path": comment.path, "line": comment.line, "body": comment.body}
