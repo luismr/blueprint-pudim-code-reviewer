@@ -144,7 +144,7 @@ Contributions are welcome via the standard fork-and-pull-request workflow:
 
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/<your-username>/blueprint-pudim-code-reviewer.git
+   git clone https://github.com/luismr/blueprint-pudim-code-reviewer.git
    cd blueprint-pudim-code-reviewer
    ```
 
