@@ -55,11 +55,13 @@ jobs:
       - uses: luismr/blueprint-pudim-code-reviewer@v1
         with:
           provider: anthropic
+          # Use sonnet for nuanced, high-quality code reviews.
+          # Haiku is faster and cheaper but less suitable for complex review guidance.
           model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Option B — see header; falls back to comment-only with GITHUB_TOKEN.
-          auto_approve: true
+          # Option A (default) — comment-only APPROVE verdicts. See header for Option B + PAT.
+          auto_approve: false
           trigger_label: pudim-code-review
           remove_trigger_label: changes_requested
           # Optional: append team-specific rules to the built-in review prompt.
