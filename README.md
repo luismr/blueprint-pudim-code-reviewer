@@ -151,6 +151,27 @@ requests** — if `auto_approve: true` with the default token, the action posts 
 comment-only review instead and logs a warning. Use a personal access token (PAT)
 with pull-request write access for real approvals.
 
+#### `auto_approve` in this repo
+
+This repository **enables `auto_approve: true`** in its dogfood workflow
+([`.github/workflows/pudim-code-review-labeled.yml`](.github/workflows/pudim-code-review-labeled.yml))
+to exercise the full approve path during development. Because the workflow uses
+the default `GITHUB_TOKEN`, approvals fall back to comment-only until a PAT is
+configured:
+
+```yaml
+# Real GitHub approvals — add a PAT secret and wire it in:
+github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
+auto_approve: true
+```
+
+| `auto_approve` | Token | Result on APPROVE verdict |
+|---|---|---|
+| `false` | `GITHUB_TOKEN` | Comment-only review |
+| `true` | `GITHUB_TOKEN` | Comment-only review (fallback + warning in Actions log) |
+| `true` | PAT with PR write | Real GitHub PR approval |
+| `false` | PAT | Comment-only review (approval not attempted) |
+
 ### Choosing a workflow variant
 
 | Variant | Trigger | Best for |
@@ -161,19 +182,24 @@ with pull-request write access for real approvals.
 Copy the labeled example from [`examples/pudim-code-review-labeled.yml`](examples/pudim-code-review-labeled.yml).
 This repo dogfoods the same workflow from
 [`.github/workflows/pudim-code-review-labeled.yml`](.github/workflows/pudim-code-review-labeled.yml)
-using `uses: ./` instead of the published action.
+using `uses: ./` instead of the published action, with **`auto_approve: true`**
+enabled for this repo's reviews.
 
 ### Model and settings
 
 | Setting | Recommendation |
 |---|---|
 | **Model** | `claude-sonnet-4-6` for nuanced, high-quality reviews. Use `claude-haiku-4-5` when cost or latency matters more than depth. |
-| **`auto_approve`** | `true` in the labeled workflow examples — APPROVE verdicts submit a GitHub approval. With the default `GITHUB_TOKEN`, the action falls back to comment-only; use a PAT for real approvals. |
+| **`auto_approve`** | `true` in this repo's labeled workflow (see table above). Most consumer repos start with `false` until a PAT is configured. |
 | **`remove_trigger_label`** | `changes_requested` (default) removes the label after a changes-requested verdict so re-reviews are opt-in. Use `always` or `never` to change that behavior. |
+| **`additional_rules`** | Inline markdown appended to the built-in prompt (e.g. team coding standards). |
+| **`additional_rules_file`** | Path to a rules file in the consumer repo (requires `actions/checkout`). |
 
 ### Review every new PR
 
 Runs on every pull request when it is opened, updated, or reopened.
+`auto_approve` defaults to `false` here — a conservative choice for continuous
+review on every push.
 
 ```yaml
 # .github/workflows/pudim-code-review.yml
@@ -210,6 +236,68 @@ jobs:
 Runs when a PR gets the label. When the review requests changes, the action
 removes the label automatically so the next review is opt-in: fix the code,
 then add `pudim-code-review` again when you are ready for another pass.
+
+**Minimal example** (comment-only approvals, default token):
+
+```yaml
+# .github/workflows/pudim-code-review-labeled.yml
+name: Pudim Code Review (labeled)
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: github.event.label.name == 'pudim-code-review'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: luismr/blueprint-pudim-code-reviewer@v1
+        with:
+          provider: anthropic
+          model: claude-sonnet-4-6
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          auto_approve: false
+          trigger_label: pudim-code-review
+          remove_trigger_label: changes_requested
+```
+
+**With real GitHub approvals** (requires a PAT secret):
+
+```yaml
+      - uses: luismr/blueprint-pudim-code-reviewer@v1
+        with:
+          provider: anthropic
+          model: claude-sonnet-4-6
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
+          auto_approve: true
+          trigger_label: pudim-code-review
+          remove_trigger_label: changes_requested
+```
+
+**Faster/cheaper model** (Haiku instead of Sonnet):
+
+```yaml
+      - uses: luismr/blueprint-pudim-code-reviewer@v1
+        with:
+          provider: anthropic
+          model: claude-haiku-4-5
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          auto_approve: false
+          trigger_label: pudim-code-review
+```
+
+**Full example** with team rules (matches [`examples/pudim-code-review-labeled.yml`](examples/pudim-code-review-labeled.yml)):
 
 ```yaml
 # .github/workflows/pudim-code-review-labeled.yml
@@ -251,11 +339,12 @@ Set `remove_trigger_label: always` to drop the label after every review
 **Re-review loop**
 
 1. Add the `pudim-code-review` label when you want a review.
-2. The action runs and posts feedback ending with `VERDICT: APPROVE` or
-   `VERDICT: CHANGES_REQUESTED`.
+2. The action runs and posts feedback with `verdict: APPROVE` or
+   `verdict: CHANGES_REQUESTED` (plus inline comments on changed lines).
 3. When changes are requested, the label is removed automatically.
 4. Address the feedback and push your fixes.
-5. Add the label again when the code is ready for another review.
+5. Add the label again — the model receives prior reviews from this action in
+   context and should include a **Previous review follow-up** section.
 
 Because the label is removed after a changes-requested verdict, incidental
 pushes do not re-trigger the reviewer. Only a fresh label application starts
