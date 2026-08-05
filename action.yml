@@ -1,0 +1,77 @@
+name: "Blueprint Pudim Code Reviewer"
+description: "Reviews pull request diffs using a swappable LLM backend (Anthropic, OpenAI, or Gemini) via LangGraph"
+author: "Luis Machado Reis (luismr)"
+branding:
+  icon: "check-circle"
+  color: "purple"
+
+inputs:
+  provider:
+    description: "Model provider to use: anthropic | openai | google_genai"
+    required: true
+    default: "anthropic"
+  model:
+    description: "Model name, e.g. claude-sonnet-4-6, gpt-4.1, gemini-2.5-pro"
+    required: true
+  api_key:
+    description: "API key for the selected provider"
+    required: true
+  github_token:
+    description: "Token used to read the PR diff and post the review comment"
+    required: true
+    default: ${{ github.token }}
+  prompt:
+    description: "Inline prompt override. Takes priority over prompt_file and prompt_repo."
+    required: false
+    default: ""
+  prompt_file:
+    description: "Path to a prompt file inside the CONSUMER repo (e.g. .github/claude-review-prompt.md)"
+    required: false
+    default: ""
+  prompt_repo:
+    description: "owner/repo to fetch a fallback/org-wide default prompt from, e.g. luismr/review-standards"
+    required: false
+    default: ""
+  prompt_repo_path:
+    description: "Path to the prompt file inside prompt_repo"
+    required: false
+    default: "CLAUDE_REVIEW.md"
+  prompt_repo_ref:
+    description: "Branch/tag/commit to read the prompt_repo file from"
+    required: false
+    default: "main"
+  prompt_repo_token:
+    description: "Token with read access to prompt_repo, if it's private and different from github_token"
+    required: false
+    default: ""
+
+outputs:
+  review:
+    description: "The full text of the posted review"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install -r ${{ github.action_path }}/requirements.txt
+
+    - name: Run review
+      shell: bash
+      run: python ${{ github.action_path }}/review.py
+      env:
+        MODEL_PROVIDER: ${{ inputs.provider }}
+        MODEL_NAME: ${{ inputs.model }}
+        API_KEY: ${{ inputs.api_key }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        REVIEW_PROMPT: ${{ inputs.prompt }}
+        PROMPT_FILE: ${{ inputs.prompt_file }}
+        PROMPT_REPO: ${{ inputs.prompt_repo }}
+        PROMPT_REPO_PATH: ${{ inputs.prompt_repo_path }}
+        PROMPT_REPO_REF: ${{ inputs.prompt_repo_ref }}
+        PROMPT_REPO_TOKEN: ${{ inputs.prompt_repo_token }}

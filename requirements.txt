@@ -1,0 +1,6 @@
+langgraph>=0.2
+langchain>=0.3
+langchain-anthropic
+langchain-openai
+langchain-google-genai
+PyGithub>=2.3
