@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-from github import Github, GithubException
+from github import Auth, Github, GithubException
 from langgraph.graph import END, StateGraph
 
 from graph.nodes import review_node
@@ -11,10 +11,13 @@ from graph.review_parser import (
     InlineComment,
     ParsedReview,
     build_github_comments,
+    filter_valid_inline_comments,
     parse_review_output,
     review_event,
 )
 from graph.state import ReviewState
+
+REVIEW_MARKER = "## Blueprint Pudim Code Review"
 
 VERDICT_SUFFIX = (
     "\n\nEnd your review with a final line in this exact format: "
@@ -66,21 +69,53 @@ def resolve_commit_sha(event: dict, pr) -> str:
     return pr.head.sha
 
 
-def format_pr_context(pr, commit_sha: str) -> str:
+def format_pr_context(pr, commit_sha: str, changed_files: list[str]) -> str:
+    files_list = "\n".join(f"- {path}" for path in changed_files)
     return (
         f"PR number: {pr.number}\n"
         f"Title: {pr.title}\n"
         f"Head branch: {pr.head.ref}\n"
         f"Base branch: {pr.base.ref}\n"
         f"Head commit SHA: {commit_sha}\n"
+        f"Changed files:\n{files_list}\n"
     )
+
+
+def get_previous_reviews(pr) -> list:
+    return [
+        review
+        for review in pr.get_reviews()
+        if REVIEW_MARKER in (review.body or "")
+    ]
+
+
+def format_previous_reviews(reviews: list) -> str:
+    if not reviews:
+        return "Previous reviews from this action: none\n"
+
+    parts = ["Previous reviews from this action:"]
+    for index, review in enumerate(reviews, start=1):
+        state = review.state or "UNKNOWN"
+        commit = (review.commit_id or "unknown")[:7]
+        submitted = review.submitted_at.isoformat() if review.submitted_at else "unknown"
+        body = review.body or ""
+        parts.append(
+            f"\n--- Review #{index} ({state}, commit {commit}, {submitted}) ---\n{body}"
+        )
+    return "\n".join(parts) + "\n"
 
 
 def get_pr_diff(gh: Github, repo_name: str, pr_number: int):
     repo = gh.get_repo(repo_name)
     pr = repo.get_pull(pr_number)
-    diff = "\n".join(f.patch or "" for f in pr.get_files())
-    return diff, pr
+    changed_files: list[str] = []
+    parts: list[str] = []
+    for file in pr.get_files():
+        changed_files.append(file.filename)
+        patch = file.patch or "(no patch)"
+        parts.append(f"### File: {file.filename}\n{patch}")
+    diff = "\n\n".join(parts)
+    return diff, pr, changed_files
 
 
 def get_review_commit(gh: Github, repo_name: str, commit_sha: str):
@@ -114,32 +149,67 @@ def parse_auto_approve(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def approval_not_permitted(exc: GithubException) -> bool:
+    if exc.status != 422:
+        return False
+    payload = exc.data if isinstance(exc.data, dict) else {}
+    errors = payload.get("errors", [])
+    combined = (
+        " ".join(str(item) for item in errors)
+        if isinstance(errors, list)
+        else str(payload)
+    )
+    lower = combined.lower()
+    return (
+        "not permitted to approve" in lower
+        or "approve your own pull request" in lower
+    )
+
+
+def submit_pr_review(pr, body: str, event: str, commit, comments: list[dict[str, object]]):
+    kwargs = {"body": body, "event": event, "commit": commit}
+    if comments:
+        return pr.create_review(**kwargs, comments=comments)
+    return pr.create_review(**kwargs)
+
+
 def post_pull_request_review(
     pr,
     parsed: ParsedReview,
     commit_sha: str,
     gh: Github,
     repo_name: str,
+    changed_files: list[str],
     auto_approve: bool = False,
 ) -> str:
     body = f"## Blueprint Pudim Code Review\n\n{parsed.overview}"
     commit = get_review_commit(gh, repo_name, commit_sha)
-    comments = build_github_comments(parsed.inline_comments)
-    review_kwargs = {
-        "body": body,
-        "event": review_event(parsed.verdict, auto_approve),
-        "commit": commit,
-    }
+    valid_comments = filter_valid_inline_comments(parsed.inline_comments, changed_files)
+    comments = build_github_comments(valid_comments)
+    event = review_event(parsed.verdict, auto_approve)
+
+    def submit_with_approval_fallback(current_event: str, inline_batch: list[dict[str, object]]):
+        try:
+            return submit_pr_review(pr, body, current_event, commit, inline_batch)
+        except GithubException as exc:
+            if current_event == "APPROVE" and approval_not_permitted(exc):
+                print(
+                    "::warning::Cannot submit GitHub PR approval with this token "
+                    "(GITHUB_TOKEN is blocked in Actions, or the token owner is the PR author). "
+                    "Posting as COMMENT instead. Use a PAT from a separate bot account "
+                    "via github_token for real auto_approve."
+                )
+                return submit_pr_review(pr, body, "COMMENT", commit, inline_batch)
+            raise
 
     try:
-        if comments:
-            pr.create_review(**review_kwargs, comments=comments)
-        else:
-            pr.create_review(**review_kwargs)
+        submit_with_approval_fallback(event, comments)
     except GithubException as exc:
+        if not comments:
+            raise
         print(f"::warning::Batch review failed, posting inline comments individually: {exc}")
-        post_inline_comments(pr, parsed.inline_comments, commit_sha)
-        pr.create_review(**review_kwargs)
+        post_inline_comments(pr, valid_comments, commit_sha)
+        submit_with_approval_fallback(event, [])
 
     return parsed.verdict
 
@@ -155,12 +225,19 @@ def publish_review(
     commit_sha: str,
     gh: Github,
     repo_name: str,
+    changed_files: list[str],
     auto_approve: bool = False,
 ) -> str:
     parsed = parse_review_output(review_text)
     if parsed:
         return post_pull_request_review(
-            pr, parsed, commit_sha, gh, repo_name, auto_approve=auto_approve
+            pr,
+            parsed,
+            commit_sha,
+            gh,
+            repo_name,
+            changed_files,
+            auto_approve=auto_approve,
         )
     post_issue_comment(pr, review_text)
     return review_text
@@ -177,7 +254,7 @@ def write_github_output(review_text: str, commit_sha: str) -> None:
 
 
 def main():
-    gh = Github(os.environ["GITHUB_TOKEN"])
+    gh = Github(auth=Auth.Token(os.environ["GITHUB_TOKEN"]))
     repo_name = os.environ["GITHUB_REPOSITORY"]
     event_path = os.environ["GITHUB_EVENT_PATH"]
 
@@ -185,9 +262,10 @@ def main():
         event = json.load(handle)
     pr_number = event["number"]
 
-    diff, pr = get_pr_diff(gh, repo_name, pr_number)
+    diff, pr, changed_files = get_pr_diff(gh, repo_name, pr_number)
     commit_sha = resolve_commit_sha(event, pr)
-    context = format_pr_context(pr, commit_sha)
+    context = format_pr_context(pr, commit_sha, changed_files)
+    context = f"{context}\n{format_previous_reviews(get_previous_reviews(pr))}"
     prompt = load_prompt()
 
     trigger_label = os.environ.get("TRIGGER_LABEL", "")
@@ -200,7 +278,7 @@ def main():
     auto_approve = parse_auto_approve(os.environ.get("AUTO_APPROVE", "false"))
 
     label_decision_text = publish_review(
-        pr, review_text, commit_sha, gh, repo_name, auto_approve=auto_approve
+        pr, review_text, commit_sha, gh, repo_name, changed_files, auto_approve=auto_approve
     )
 
     remove_mode = os.environ.get("REMOVE_TRIGGER_LABEL", "changes_requested")

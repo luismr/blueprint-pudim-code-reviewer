@@ -1,0 +1,70 @@
+# Consumer template — copy to .github/workflows/pudim-code-review-labeled.yml
+#
+# Add the "pudim-code-review" label to a PR to trigger a review.
+#
+# auto_approve (choose one):
+#
+#   Option A — comment-only APPROVE verdicts (recommended starting point):
+#     auto_approve: false
+#
+#   Option B — submit real GitHub approvals when the verdict is APPROVE:
+#     auto_approve: true
+#     GITHUB_TOKEN cannot approve PRs in Actions; the action detects this and
+#     falls back to a comment-only review automatically. For real approvals,
+#     use a PAT with pull-request write access:
+#       github_token: ${{ secrets.PUDIM_GITHUB_PAT }}
+#
+# This repo (blueprint-pudim-code-reviewer) uses Option B in its dogfood
+# workflow (.github/workflows/pudim-code-review-labeled.yml, uses: ./).
+# Consumer repos should use the published action below:
+#   uses: luismr/blueprint-pudim-code-reviewer@v1
+#
+# QUICK START
+#   1. Copy this file to .github/workflows/ in your repo
+#   2. Add ANTHROPIC_API_KEY as a repository secret
+#   3. Open a PR and add the "pudim-code-review" label
+#
+# MODEL CHOICE
+#   claude-sonnet-4-6  — nuanced, high-quality reviews (recommended)
+#   claude-haiku-4-5   — faster and cheaper, good for quick feedback
+#
+# remove_trigger_label
+#   changes_requested — remove label only when changes are requested (default)
+#   always            — remove label after every review
+#   never             — keep the label (manual removal)
+#
+# Requires repository secret: ANTHROPIC_API_KEY
+name: Pudim Code Review (labeled)
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: github.event.label.name == 'pudim-code-review'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: luismr/blueprint-pudim-code-reviewer@v1
+        with:
+          provider: anthropic
+          # Use sonnet for nuanced, high-quality code reviews.
+          # Haiku is faster and cheaper but less suitable for complex review guidance.
+          model: claude-sonnet-4-6
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Option A (default) — comment-only APPROVE verdicts. See header for Option B + PAT.
+          auto_approve: false
+          trigger_label: pudim-code-review
+          remove_trigger_label: changes_requested
+          # Optional: append team-specific rules to the built-in review prompt.
+          # additional_rules: |
+          #   - Flag missing tests for auth changes
+          # additional_rules_file: .github/pudim-review-rules.md

@@ -1,0 +1,51 @@
+# Add the "pudim-code-review" label to a PR to trigger a review.
+#
+# auto_approve: true — enabled for this repo's reviews (intentional dogfooding).
+# Real GitHub approvals require PUDIM_GITHUB_PAT from a separate bot account:
+#   - GITHUB_TOKEN cannot approve PRs in Actions
+#   - A PAT owned by the PR author cannot approve their own PR
+# Add repository secret PUDIM_GITHUB_PAT (fine-grained PAT, pull-requests: write).
+#
+# Requires repository secret: ANTHROPIC_API_KEY
+# Consumer template: examples/pudim-code-review-labeled.yml
+#
+# How to trigger:
+#   1. Open a pull request
+#   2. Add the "pudim-code-review" label
+#   3. The action posts a structured review (overview + inline comments)
+#
+# Re-review loop:
+#   After CHANGES_REQUESTED, the label is removed automatically. Fix the code,
+#   then re-add "pudim-code-review" for another pass. Prior reviews from this
+#   action are included in context for follow-up feedback.
+name: Pudim Code Review (labeled)
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: github.event.label.name == 'pudim-code-review'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        with:
+          provider: anthropic
+          # Use sonnet for nuanced, high-quality code reviews.
+          # Haiku is faster and cheaper but less suitable for complex review guidance.
+          model: claude-sonnet-4-6
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Prefer bot-account PAT for real auto_approve; fall back to GITHUB_TOKEN.
+          github_token: ${{ secrets.PUDIM_GITHUB_PAT != '' && secrets.PUDIM_GITHUB_PAT || github.token }}
+          # auto_approve: true — see header; falls back to comment-only with GITHUB_TOKEN.
+          auto_approve: true
+          trigger_label: pudim-code-review
+          remove_trigger_label: changes_requested

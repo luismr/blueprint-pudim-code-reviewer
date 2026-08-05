@@ -86,12 +86,12 @@ Do not add prose before or after the JSON.
 
 **Field rules**
 - `commit_id` (string, required) — the **Head commit SHA** from PR context. Every inline comment is posted against this commit via the GitHub Reviews API (`commit_id` + `path` + `line`).
-- `overview` (string, required) — the core review overview posted as the PR review body. Include PR info, executive summary, issues summary table, what's good/bad, and recommendations. Do **not** repeat full per-issue write-ups here; those belong in `inline_comments`.
+- `overview` (string, required) — the core review overview posted as the PR review body. Include PR info, executive summary, issues summary table, what's good/bad, and recommendations. When **Previous reviews from this action** in PR context is not `none`, add a **Previous review follow-up** section that explicitly references prior review(s): what was raised before, what is now resolved, and what remains open. Do **not** repeat full per-issue write-ups here; those belong in `inline_comments`.
 - `verdict` (string, required) — exactly `APPROVE` or `CHANGES_REQUESTED`, mapped from Step 3.
 - `inline_comments` (array, required) — one entry per actionable finding tied to a changed line in the diff. Use an empty array when there are no line-specific findings.
 
 **Inline comment rules**
-- `path` — file path exactly as it appears in the diff.
+- `path` — must exactly match a path from the **Changed files** list in PR context (same as the `### File:` headers in the diff).
 - `line` — the **new-file line number** (right side of the diff) for the changed line being commented on. Must refer to a line present in the diff.
 - `body` — markdown with severity emoji + level, What/Why/How, and an optional fenced fix snippet. No invented files or line numbers.
 
