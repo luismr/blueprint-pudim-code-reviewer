@@ -23,7 +23,7 @@ jobs:
       - uses: ./
         with:
           provider: anthropic
-          model: claude-sonnet-4-6
+          model: claude-haiku-4-5
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           auto_approve: false
