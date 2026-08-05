@@ -14,12 +14,8 @@ def clean_env(monkeypatch):
     """Wipe relevant env vars before every test so tests don't leak state
     into one another via os.environ."""
     for var in [
-        "REVIEW_PROMPT",
-        "PROMPT_FILE",
-        "PROMPT_REPO",
-        "PROMPT_REPO_PATH",
-        "PROMPT_REPO_REF",
-        "PROMPT_REPO_TOKEN",
+        "ADDITIONAL_RULES",
+        "ADDITIONAL_RULES_FILE",
         "MODEL_PROVIDER",
         "MODEL_NAME",
         "API_KEY",
@@ -30,5 +26,8 @@ def clean_env(monkeypatch):
         "GITHUB_REPOSITORY",
         "GITHUB_EVENT_PATH",
         "GITHUB_OUTPUT",
+        "TRIGGER_LABEL",
+        "REMOVE_TRIGGER_LABEL",
+        "AUTO_APPROVE",
     ]:
         monkeypatch.delenv(var, raising=False)

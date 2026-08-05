@@ -1,52 +1,41 @@
 """
-Resolves the review prompt using a fallback chain:
+Builds the review prompt from the built-in default plus optional extra rules.
 
-1. Inline `prompt` input (REVIEW_PROMPT env var)
-2. Local file in the consumer repo (PROMPT_FILE env var)
-3. Remote file fetched from another GitHub repo (PROMPT_REPO / PROMPT_REPO_PATH / PROMPT_REPO_REF)
-4. Built-in default string
+Optional rules from `additional_rules_file` and `additional_rules` replace the
+default placeholder after Step 2. When no rules are configured, the prompt file
+is returned unchanged.
 """
 
 import os
+from pathlib import Path
 
-from github import Github
-
-DEFAULT_PROMPT = "Review this diff for bugs, security issues, and style problems."
-
-
-def _build_remote_client(base_gh: Github) -> Github:
-    """Use a dedicated token for the prompt repo if one was supplied,
-    otherwise reuse the client passed in (typically authenticated with
-    the consumer repo's GITHUB_TOKEN)."""
-    remote_token = os.environ.get("PROMPT_REPO_TOKEN", "").strip()
-    if remote_token:
-        return Github(remote_token)
-    return base_gh
+_DEFAULT_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "default_review.md"
+DEFAULT_PROMPT = _DEFAULT_PROMPT_PATH.read_text(encoding="utf-8")
+ADDITIONAL_RULES_DEFAULT = "_No additional rules configured._"
 
 
-def load_prompt(gh: Github) -> str:
-    # 1. Explicit inline override
-    inline = os.environ.get("REVIEW_PROMPT", "").strip()
-    if inline:
-        return inline
+def _collect_additional_rules() -> str | None:
+    parts: list[str] = []
 
-    # 2. Local file in the consumer repo
-    local_path = os.environ.get("PROMPT_FILE", "").strip()
-    if local_path and os.path.exists(local_path):
-        return open(local_path, encoding="utf-8").read()
+    rules_file = os.environ.get("ADDITIONAL_RULES_FILE", "").strip()
+    if rules_file and os.path.exists(rules_file):
+        file_rules = open(rules_file, encoding="utf-8").read().strip()
+        if file_rules:
+            parts.append(file_rules)
 
-    # 3. Remote file from another repo
-    remote_repo = os.environ.get("PROMPT_REPO", "").strip()
-    if remote_repo:
-        remote_path = os.environ.get("PROMPT_REPO_PATH", "CLAUDE_REVIEW.md")
-        remote_ref = os.environ.get("PROMPT_REPO_REF", "main")
-        try:
-            client = _build_remote_client(gh)
-            repo = client.get_repo(remote_repo)
-            content_file = repo.get_contents(remote_path, ref=remote_ref)
-            return content_file.decoded_content.decode("utf-8")
-        except Exception as e:
-            print(f"::warning::Could not fetch prompt from {remote_repo}: {e}")
+    inline_rules = os.environ.get("ADDITIONAL_RULES", "").strip()
+    if inline_rules:
+        parts.append(inline_rules)
 
-    # 4. Built-in fallback
-    return DEFAULT_PROMPT
+    if not parts:
+        return None
+
+    return "\n\n".join(parts)
+
+
+def load_prompt() -> str:
+    rules = _collect_additional_rules()
+    if not rules:
+        return DEFAULT_PROMPT
+
+    return DEFAULT_PROMPT.replace(ADDITIONAL_RULES_DEFAULT, rules)

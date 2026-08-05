@@ -42,7 +42,11 @@ def review_node(state: ReviewState) -> ReviewState:
     provider = PROVIDER_MAP[os.environ["MODEL_PROVIDER"]]
     suffix = PROVIDER_PROMPT_SUFFIX.get(provider, "")
 
-    full_prompt = f"{state['prompt']}{suffix}\n\nHere is the diff:\n{state['diff']}"
+    full_prompt = (
+        f"{state['prompt']}{suffix}\n\n"
+        f"PR context:\n{state['context']}\n\n"
+        f"Here is the diff:\n{state['diff']}"
+    )
     response = model.invoke(full_prompt)
 
     return {**state, "result": response.content}

@@ -20,34 +20,32 @@ inputs:
     description: "Token used to read the PR diff and post the review comment"
     required: true
     default: ${{ github.token }}
-  prompt:
-    description: "Inline prompt override. Takes priority over prompt_file and prompt_repo."
+  additional_rules:
+    description: "Optional extra code review rules appended to the built-in prompt"
     required: false
     default: ""
-  prompt_file:
-    description: "Path to a prompt file inside the CONSUMER repo (e.g. .github/claude-review-prompt.md)"
+  additional_rules_file:
+    description: "Optional path to a rules file in the consumer repo (e.g. .github/pudim-review-rules.md). Requires checkout. Appended before additional_rules."
     required: false
     default: ""
-  prompt_repo:
-    description: "owner/repo to fetch a fallback/org-wide default prompt from, e.g. luismr/review-standards"
+  trigger_label:
+    description: "PR label that triggered this review (e.g. pudim-code-review). When set, the action can remove it after the review."
     required: false
     default: ""
-  prompt_repo_path:
-    description: "Path to the prompt file inside prompt_repo"
+  remove_trigger_label:
+    description: "When to remove trigger_label: changes_requested (default) | always | never"
     required: false
-    default: "CLAUDE_REVIEW.md"
-  prompt_repo_ref:
-    description: "Branch/tag/commit to read the prompt_repo file from"
+    default: "changes_requested"
+  auto_approve:
+    description: "When true, submit APPROVE verdicts as GitHub PR approvals. When false (default), APPROVE verdicts are posted as COMMENT reviews only."
     required: false
-    default: "main"
-  prompt_repo_token:
-    description: "Token with read access to prompt_repo, if it's private and different from github_token"
-    required: false
-    default: ""
+    default: "false"
 
 outputs:
   review:
     description: "The full text of the posted review"
+  commit_sha:
+    description: "Head commit SHA used to post inline review comments"
 
 runs:
   using: "composite"
@@ -69,9 +67,8 @@ runs:
         MODEL_NAME: ${{ inputs.model }}
         API_KEY: ${{ inputs.api_key }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
-        REVIEW_PROMPT: ${{ inputs.prompt }}
-        PROMPT_FILE: ${{ inputs.prompt_file }}
-        PROMPT_REPO: ${{ inputs.prompt_repo }}
-        PROMPT_REPO_PATH: ${{ inputs.prompt_repo_path }}
-        PROMPT_REPO_REF: ${{ inputs.prompt_repo_ref }}
-        PROMPT_REPO_TOKEN: ${{ inputs.prompt_repo_token }}
+        ADDITIONAL_RULES: ${{ inputs.additional_rules }}
+        ADDITIONAL_RULES_FILE: ${{ inputs.additional_rules_file }}
+        TRIGGER_LABEL: ${{ inputs.trigger_label }}
+        REMOVE_TRIGGER_LABEL: ${{ inputs.remove_trigger_label }}
+        AUTO_APPROVE: ${{ inputs.auto_approve }}
