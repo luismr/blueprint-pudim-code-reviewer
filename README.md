@@ -151,6 +151,26 @@ requests** — if `auto_approve: true` with the default token, the action posts 
 comment-only review instead and logs a warning. Use a personal access token (PAT)
 with pull-request write access for real approvals.
 
+### Choosing a workflow variant
+
+| Variant | Trigger | Best for |
+|---|---|---|
+| **Every new PR** | `opened`, `synchronize`, `reopened` | Continuous review on every push |
+| **Label-triggered** | `pudim-code-review` label applied | Opt-in reviews; re-add label after fixes |
+
+Copy the labeled example from [`examples/pudim-code-review-labeled.yml`](examples/pudim-code-review-labeled.yml).
+This repo dogfoods the same workflow from
+[`.github/workflows/pudim-code-review-labeled.yml`](.github/workflows/pudim-code-review-labeled.yml)
+using `uses: ./` instead of the published action.
+
+### Model and settings
+
+| Setting | Recommendation |
+|---|---|
+| **Model** | `claude-sonnet-4-6` for nuanced, high-quality reviews. Use `claude-haiku-4-5` when cost or latency matters more than depth. |
+| **`auto_approve`** | `false` (default) for comment-only APPROVE verdicts. Set `true` only with a PAT — `GITHUB_TOKEN` cannot approve PRs. |
+| **`remove_trigger_label`** | `changes_requested` (default) removes the label after a changes-requested verdict so re-reviews are opt-in. Use `always` or `never` to change that behavior. |
+
 ### Review every new PR
 
 Runs on every pull request when it is opened, updated, or reopened.

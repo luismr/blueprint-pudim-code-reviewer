@@ -301,7 +301,7 @@ def test_post_pull_request_review_filters_unknown_paths(mock_gh, capsys):
         event="REQUEST_CHANGES",
         commit=fake_commit,
     )
-    assert "Skipping inline comment with unknown path" in capsys.readouterr().out
+    assert "Review model generated invalid path" in capsys.readouterr().out
 
 
 def test_post_pull_request_review_without_inline_comments(mock_gh):

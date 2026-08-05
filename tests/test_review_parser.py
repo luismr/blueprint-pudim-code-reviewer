@@ -133,4 +133,4 @@ def test_filter_valid_inline_comments_keeps_known_paths(capsys):
     )
 
     assert valid == [InlineComment(path="src/a.py", line=1, body="one")]
-    assert "Skipping inline comment with unknown path" in capsys.readouterr().out
+    assert "Review model generated invalid path" in capsys.readouterr().out

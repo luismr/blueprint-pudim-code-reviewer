@@ -1,11 +1,13 @@
-# Example: add the "pudim-code-review" label to a PR to trigger a review.
+# Consumer template: copy to .github/workflows/pudim-code-review-labeled.yml
+# in your repo, then add the "pudim-code-review" label to a PR to trigger a review.
+#
 # auto_approve is false — APPROVE verdicts are posted as comment-only reviews.
+# GITHUB_TOKEN cannot approve PRs in Actions; use a PAT for real approvals.
 #
 # Requires repository secret: ANTHROPIC_API_KEY
-# This repo runs the workflow from .github/workflows/pudim-code-review-labeled.yml
-# Consumer repos: copy this file to .github/workflows/ and replace `uses: ./` with:
-#   uses: luismr/blueprint-pudim-code-reviewer@v1
-name: Pudim Code Review (labeled example)
+# This repo dogfoods the action from .github/workflows/pudim-code-review-labeled.yml
+# (uses: ./). Consumer repos should use the published action below.
+name: Pudim Code Review (labeled)
 
 on:
   pull_request:
@@ -23,9 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./
+      - uses: luismr/blueprint-pudim-code-reviewer@v1
         with:
           provider: anthropic
+          # Use sonnet for nuanced, high-quality code reviews.
+          # Haiku is faster and cheaper but less suitable for complex review guidance.
           model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

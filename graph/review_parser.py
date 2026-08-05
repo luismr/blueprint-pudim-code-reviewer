@@ -96,8 +96,9 @@ def filter_valid_inline_comments(
             valid.append(comment)
         else:
             print(
-                f"::warning::Skipping inline comment with unknown path "
-                f"{comment.path!r}; changed files: {', '.join(changed_files)}"
+                f"::warning::Review model generated invalid path {comment.path!r} "
+                f"on line {comment.line}. Skipped. "
+                f"Changed files: {', '.join(changed_files)}"
             )
     return valid
 

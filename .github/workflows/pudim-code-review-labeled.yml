@@ -1,8 +1,9 @@
-# Add the "pudim-code-review" label to a PR to trigger a review.
-# auto_approve is true, but GITHUB_TOKEN cannot approve PRs in Actions — the
-# action falls back to a comment-only review. Use a PAT for real approvals.
+# Dogfood workflow: add the "pudim-code-review" label to a PR to trigger a review.
+# auto_approve is false — GITHUB_TOKEN cannot approve PRs in Actions.
+# Use a PAT with pull-request write access for real approvals.
 #
 # Requires repository secret: ANTHROPIC_API_KEY
+# Consumer template: examples/pudim-code-review-labeled.yml
 name: Pudim Code Review (labeled)
 
 on:
@@ -24,9 +25,11 @@ jobs:
       - uses: ./
         with:
           provider: anthropic
-          model: claude-haiku-4-5
+          # Use sonnet for nuanced, high-quality code reviews.
+          # Haiku is faster and cheaper but less suitable for complex review guidance.
+          model: claude-sonnet-4-6
           api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          auto_approve: true
+          auto_approve: false
           trigger_label: pudim-code-review
           remove_trigger_label: changes_requested
