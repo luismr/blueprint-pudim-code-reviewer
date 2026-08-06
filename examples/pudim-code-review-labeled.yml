@@ -17,7 +17,7 @@
 # This repo (blueprint-pudim-code-reviewer) uses Option B in its dogfood
 # workflow (.github/workflows/pudim-code-review-labeled.yml, uses: ./).
 # Consumer repos should use the published action below:
-#   uses: luismr/blueprint-pudim-code-reviewer@v1
+#   uses: luismr/blueprint-pudim-code-reviewer@v1.0.1
 #
 # QUICK START
 #   1. Copy this file to .github/workflows/ in your repo
@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: luismr/blueprint-pudim-code-reviewer@v1
+      - uses: luismr/blueprint-pudim-code-reviewer@v1.0.1
         with:
           provider: anthropic
           # Use sonnet for nuanced, high-quality code reviews.
