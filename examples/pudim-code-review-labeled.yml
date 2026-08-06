@@ -24,9 +24,11 @@
 #   2. Add ANTHROPIC_API_KEY as a repository secret
 #   3. Open a PR and add the "pudim-code-review" label
 #
-# MODEL CHOICE
-#   claude-sonnet-4-6  — nuanced, high-quality reviews (recommended)
-#   claude-haiku-4-5   — faster and cheaper, good for quick feedback
+# MODEL CHOICE (provider: anthropic | openai | google_genai)
+#   claude-sonnet-4-6  — Anthropic, nuanced reviews (recommended)
+#   claude-haiku-4-5   — Anthropic, faster and cheaper
+#   gpt-4.1            — OpenAI (provider: openai, secret: OPENAI_API_KEY)
+#   gemini-2.5-pro     — Google Gemini (provider: google_genai, secret: GOOGLE_API_KEY)
 #
 # remove_trigger_label
 #   changes_requested — remove label only when changes are requested (default)

@@ -37,6 +37,27 @@ def build_model():
     return init_chat_model(model_name, model_provider=provider)
 
 
+def content_to_text(content: object) -> str:
+    """Normalize LangChain AIMessage.content to a plain string.
+
+    Gemini (google_genai) often returns a list of content blocks instead of a
+    string; Anthropic and OpenAI typically return str already.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if text:
+                    parts.append(str(text))
+        return "".join(parts)
+    return str(content)
+
+
 def review_node(state: ReviewState) -> ReviewState:
     model = build_model()
     provider = PROVIDER_MAP[os.environ["MODEL_PROVIDER"]]
@@ -49,4 +70,4 @@ def review_node(state: ReviewState) -> ReviewState:
     )
     response = model.invoke(full_prompt)
 
-    return {**state, "result": response.content}
+    return {**state, "result": content_to_text(response.content)}

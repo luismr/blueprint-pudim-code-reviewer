@@ -126,9 +126,32 @@ pip install -r requirements-dev.txt
 
 Add a workflow file under `.github/workflows/` in the **consumer** repository
 (the repo whose PRs you want reviewed). Store your provider API key as a
-repository secret (e.g. `ANTHROPIC_API_KEY`).
+repository secret (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
+`GOOGLE_API_KEY` for Gemini).
 
 See `action.yml` for the full list of inputs and their defaults.
+
+### LLM providers
+
+| `provider` input | Secret / env key | Example `model` values |
+|---|---|---|
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6`, `claude-haiku-4-5` |
+| `openai` | `OPENAI_API_KEY` | `gpt-4.1`, `gpt-4o` |
+| `google_genai` | `GOOGLE_API_KEY` | `gemini-2.5-pro`, `gemini-2.0-flash` |
+
+**Gemini example** (use `google_genai`, not `gemini`):
+
+```yaml
+- uses: luismr/blueprint-pudim-code-reviewer@v1
+  with:
+    provider: google_genai
+    model: gemini-2.5-pro
+    api_key: ${{ secrets.GOOGLE_API_KEY }}
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Repository **variables** (non-secret config) use `${{ vars.VAR_NAME }}`; API keys
+belong in **secrets** (`${{ secrets.SECRET_NAME }}`).
 
 The action always starts from the built-in review workflow in
 [`prompts/default_review.md`](prompts/default_review.md). Optionally append
@@ -201,7 +224,7 @@ using `uses: ./` instead of the published action, with **Option B**
 
 | Setting | Recommendation |
 |---|---|
-| **Model** | `claude-sonnet-4-6` for nuanced, high-quality reviews. Use `claude-haiku-4-5` when cost or latency matters more than depth. |
+| **Provider / model** | Anthropic `claude-sonnet-4-6` or OpenAI `gpt-4.1` for quality; Gemini `gemini-2.5-pro` via `provider: google_genai`; Haiku / Flash models when cost or latency matter more. |
 | **`auto_approve`** | **Option B** (`true`) in this repo's dogfood workflow — falls back to comment-only with `GITHUB_TOKEN`. Consumer repos: start with **Option A** (`false`) or use **Option B + PAT** for real approvals. |
 | **`remove_trigger_label`** | `changes_requested` (default) removes the label after a changes-requested verdict so re-reviews are opt-in. Use `always` or `never` to change that behavior. |
 | **`additional_rules`** | Inline markdown appended to the built-in prompt (e.g. team coding standards). |

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from graph.nodes import build_model, review_node
+from graph.nodes import build_model, content_to_text, review_node
 from graph.state import ReviewState
 
 
@@ -71,6 +71,46 @@ def test_review_node_applies_provider_suffix(monkeypatch, provider, expected_suf
         assert "some diff" in invoked_prompt
         assert "Head commit SHA: abc123" in invoked_prompt
         assert result["result"] == "Review output"
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        ("plain string", "plain string"),
+        ([{"type": "text", "text": '{"verdict": "APPROVE"}'}], '{"verdict": "APPROVE"}'),
+        (["part-a", {"text": "part-b"}, {"type": "text"}], "part-apart-b"),
+        ([{"type": "text"}, 42, "tail"], "tail"),
+        ([], ""),
+        (123, "123"),
+    ],
+)
+def test_content_to_text_normalizes_provider_content(content, expected):
+    assert content_to_text(content) == expected
+
+
+def test_review_node_normalizes_gemini_list_content(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "google_genai")
+    monkeypatch.setenv("MODEL_NAME", "gemini-2.5-pro")
+    monkeypatch.setenv("API_KEY", "fake-key")
+
+    fake_response = MagicMock()
+    fake_response.content = [
+        {"type": "text", "text": '{"overview": "OK", "verdict": "APPROVE", "inline_comments": []}'}
+    ]
+
+    with patch("graph.nodes.build_model") as mock_build:
+        mock_build.return_value.invoke.return_value = fake_response
+
+        result = review_node(
+            {
+                "diff": "some diff",
+                "prompt": "Review this",
+                "context": "Head commit SHA: abc123\n",
+                "result": "",
+            }
+        )
+
+        assert result["result"].startswith('{"overview": "OK"')
 
 
 def test_review_node_invokes_model_and_updates_state(monkeypatch):
