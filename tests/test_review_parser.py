@@ -7,6 +7,7 @@ from graph.review_parser import (
     ParsedReview,
     build_github_comments,
     filter_valid_inline_comments,
+    normalize_escaped_markdown,
     parse_review_output,
     review_event,
 )
@@ -26,6 +27,54 @@ def _sample_payload(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+def test_normalize_escaped_markdown_noop_without_backslash():
+    assert normalize_escaped_markdown("## PR info\n- Branch: feature") == (
+        "## PR info\n- Branch: feature"
+    )
+
+
+def test_normalize_escaped_markdown_decodes_double_escaped_whitespace():
+    leftover = "- PR info\\n  - Branch: SHSAI-2435\\n\\n- Summary\\tgap"
+    assert normalize_escaped_markdown(leftover) == (
+        "- PR info\n  - Branch: SHSAI-2435\n\n- Summary\tgap"
+    )
+
+
+def test_normalize_escaped_markdown_decodes_escaped_crlf():
+    assert normalize_escaped_markdown("a\\r\\nb\\rc") == "a\nb\nc"
+
+
+def test_parse_review_output_unescapes_double_escaped_overview_and_body():
+    """Regression: model copies prompt `\\n` as a second JSON escape layer.
+
+    After json.loads the overview still contains the two-character sequence
+    backslash-n, which GitHub renders as a single unreadable line.
+    """
+    payload = {
+        "overview": "- PR info\\n  - Branch: SHSAI-2435\\n  - Base: master",
+        "verdict": "CHANGES_REQUESTED",
+        "inline_comments": [
+            {
+                "path": "src/main.py",
+                "line": 12,
+                "body": "🟡 **Major** — Missing check.\\n\\n**What:** null.\\n**Why:** crash.",
+            }
+        ],
+    }
+
+    parsed = parse_review_output(json.dumps(payload))
+
+    assert parsed is not None
+    assert parsed.overview == (
+        "- PR info\n  - Branch: SHSAI-2435\n  - Base: master"
+    )
+    assert "\\n" not in parsed.overview
+    assert parsed.inline_comments[0].body == (
+        "🟡 **Major** — Missing check.\n\n**What:** null.\n**Why:** crash."
+    )
+    assert "\\n" not in parsed.inline_comments[0].body
 
 
 def test_parse_review_output_from_raw_json():

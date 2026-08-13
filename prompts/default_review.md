@@ -72,23 +72,33 @@ Do not add prose before or after the JSON.
 ```json
 {
   "commit_id": "abc123def456",
-  "overview": "## PR info\\n- Branch: ...\\n- Base: main\\n- Commit: abc123def456\\n\\n## Executive summary\\n...\\n\\n## Issues summary\\n| Severity | Issue |\\n|---|---|\\n| 🟡 Major | ... |\\n\\n## What's good\\n- ...\\n\\n## What's bad\\n- ...\\n\\n## Recommendations\\n- ...",
+  "overview": "## PR info\n- Branch: feature\n- Base: main\n\n## Executive summary\nLooks good overall.\n\n## Issues summary\n| Severity | Issue |\n|---|---|\n| 🔵 Minor | Naming nit |\n\n## What's good\n- Tests cover the new path\n\n## What's bad\n- One naming nit\n\n## Recommendations\n- Rename the helper",
   "verdict": "APPROVE",
   "inline_comments": [
     {
       "path": "src/example.py",
       "line": 42,
-      "body": "🟡 **Major** — Short title\\n\\n**What:** ...\\n**Why:** ...\\n**How:** ...\\n\\n```python\\nsuggested fix\\n```"
+      "body": "🔵 **Minor** — Rename helper\n\n**What:** `doStuff` is vague.\n**Why:** Callers cannot tell the side effect.\n**How:** Rename to `persistOrder`."
     }
   ]
 }
 ```
 
+That JSON is valid: each `\n` above is **one** JSON escape (backslash + n). After parsing, GitHub must receive **real line breaks**. Decoded `overview` looks like:
+
+```
+## PR info
+- Branch: feature
+- Base: main
+```
+
+**Do not double-escape.** Never write `\\n` (two backslashes) inside the JSON strings. A parsed overview that still contains the two-character sequence backslash-n renders as one unreadable line on GitHub.
+
 **Field rules**
 - `commit_id` (string, required) — the **Head commit SHA** from PR context. Every inline comment is posted against this commit via the GitHub Reviews API (`commit_id` + `path` + `line`).
-- `overview` (string, required) — the core review overview posted as the PR review body. Include PR info, executive summary, issues summary table, what's good/bad, and recommendations. When **Previous reviews from this action** in PR context is not `none`, add a **Previous review follow-up** section that explicitly references prior review(s): what was raised before, what is now resolved, and what remains open. Do **not** repeat full per-issue write-ups here; those belong in `inline_comments`.
+- `overview` (string, required) — the core review overview posted as the PR review body. Include PR info, executive summary, issues summary table, what's good/bad, and recommendations. When **Previous reviews from this action** in PR context is not `none`, add a **Previous review follow-up** section that explicitly references prior review(s): what was raised before, what is now resolved, and what remains open. Do **not** repeat full per-issue write-ups here; those belong in `inline_comments`. Encode line breaks as a **single** JSON `\n`. After parsing, the body must contain real newlines — not the two-character sequence backslash-n.
 - `verdict` (string, required) — exactly `APPROVE` or `CHANGES_REQUESTED`, mapped from Step 3.
-- `inline_comments` (array, required) — one entry per actionable finding tied to a changed line in the diff. Use an empty array when there are no line-specific findings.
+- `inline_comments` (array, required) — one entry per actionable finding tied to a changed line in the diff. Use an empty array when there are no line-specific findings. Each `body` follows the same single-`\n` rule as `overview`.
 
 **Inline comment rules**
 - `path` — must exactly match a path from the **Changed files** list in PR context (same as the `### File:` headers in the diff).

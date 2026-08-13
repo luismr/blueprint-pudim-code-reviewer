@@ -10,6 +10,12 @@ def test_collect_additional_rules_returns_none_when_empty(monkeypatch):
     assert _collect_additional_rules() is None
 
 
+def test_default_prompt_forbids_double_escaped_newlines():
+    assert "Do not double-escape" in DEFAULT_PROMPT
+    assert "real line breaks" in DEFAULT_PROMPT
+    assert "**single** JSON" in DEFAULT_PROMPT
+
+
 def test_load_prompt_keeps_default_placeholder_when_empty(monkeypatch):
     result = load_prompt()
 

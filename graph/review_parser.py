@@ -17,6 +17,24 @@ class ParsedReview:
     inline_comments: list[InlineComment]
 
 
+def normalize_escaped_markdown(text: str) -> str:
+    """Turn leftover JSON-style ``\\n`` / ``\\t`` into real whitespace.
+
+    After ``json.loads``, a correctly escaped overview contains real newlines.
+    Some models copy the prompt's ``\\n`` example as a second escape layer, so
+    the parsed string still contains the two-character sequence backslash-n.
+    GitHub then renders a single-line wall of ``\\n`` instead of markdown.
+    """
+    if "\\" not in text:
+        return text
+    return (
+        text.replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\r", "\n")
+        .replace("\\t", "\t")
+    )
+
+
 def _extract_json(text: str) -> str:
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE)
     if fenced:
@@ -38,7 +56,7 @@ def _parse_inline_comment(raw: object) -> InlineComment | None:
     try:
         path = str(raw["path"]).strip()
         line = int(raw["line"])
-        body = str(raw["body"]).strip()
+        body = normalize_escaped_markdown(str(raw["body"]).strip())
     except (KeyError, TypeError, ValueError):
         print(f"::warning::Skipping invalid inline comment: {raw}")
         return None
@@ -56,7 +74,7 @@ def parse_review_output(text: str) -> ParsedReview | None:
     except (ValueError, json.JSONDecodeError):
         return None
 
-    overview = str(payload.get("overview", "")).strip()
+    overview = normalize_escaped_markdown(str(payload.get("overview", "")).strip())
     verdict = str(payload.get("verdict", "")).strip().upper()
     if not overview or verdict not in {"APPROVE", "CHANGES_REQUESTED"}:
         return None

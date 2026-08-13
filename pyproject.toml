@@ -1,6 +1,6 @@
 [project]
 name = "blueprint-pudim-code-reviewer"
-version = "1.0.1"
+version = "1.0.2"
 description = "A GitHub Action that reviews PR diffs using a swappable LLM backend (Anthropic, OpenAI, Gemini) via LangGraph"
 authors = [
     { name = "Luis Machado Reis", email = "contact@luismachadoreis.dev" }
