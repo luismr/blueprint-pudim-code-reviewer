@@ -1,8 +1,16 @@
 # Changelog
 
-## v1.0.2 — 2026-08-13
+## v1.0.2 — 2026-08-18
 
 ### Fixed
+
+- **Action crashes when PAT owner reviews their own PR** — GitHub returns 422
+  `"Review Can not request changes on your own pull request"` for
+  `REQUEST_CHANGES` events on self-authored PRs. The error was previously
+  uncaught (the guard only covered `APPROVE`), crashing the action with exit
+  code 1. Any self-review block (both `APPROVE` and `REQUEST_CHANGES`) now
+  falls back to posting a plain issue comment instead of retrying as a formal
+  review.
 
 - **Review body rendered as a single line of `\n`** — some models copy the
   prompt's JSON `\n` example as a second escape layer, so after `json.loads`
