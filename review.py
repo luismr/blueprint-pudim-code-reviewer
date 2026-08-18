@@ -163,6 +163,7 @@ def approval_not_permitted(exc: GithubException) -> bool:
     return (
         "not permitted to approve" in lower
         or "approve your own pull request" in lower
+        or "request changes on your own pull request" in lower
     )
 
 
@@ -188,28 +189,36 @@ def post_pull_request_review(
     comments = build_github_comments(valid_comments)
     event = review_event(parsed.verdict, auto_approve)
 
-    def submit_with_approval_fallback(current_event: str, inline_batch: list[dict[str, object]]):
+    def submit_with_self_review_fallback(current_event: str, inline_batch: list[dict[str, object]]) -> bool:
+        """Submit a PR review; fall back to an issue comment when GitHub blocks self-review.
+
+        Returns True when the self-review fallback fired (issue comment already posted),
+        False on a clean success.  Re-raises any other GithubException.
+        """
         try:
-            return submit_pr_review(pr, body, current_event, commit, inline_batch)
+            submit_pr_review(pr, body, current_event, commit, inline_batch)
+            return False
         except GithubException as exc:
-            if current_event == "APPROVE" and approval_not_permitted(exc):
+            if approval_not_permitted(exc):
                 print(
-                    "::warning::Cannot submit GitHub PR approval with this token "
-                    "(GITHUB_TOKEN is blocked in Actions, or the token owner is the PR author). "
-                    "Posting as COMMENT instead. Use a PAT from a separate bot account "
-                    "via github_token for real auto_approve."
+                    "::warning::Cannot submit GitHub PR review with this token "
+                    "(the token owner is the PR author). "
+                    "Posting as an issue comment instead. Use a PAT from a separate "
+                    "bot account via github_token for real reviews."
                 )
-                return submit_pr_review(pr, body, "COMMENT", commit, inline_batch)
+                post_issue_comment(pr, parsed.overview)
+                return True
             raise
 
     try:
-        submit_with_approval_fallback(event, comments)
+        if submit_with_self_review_fallback(event, comments):
+            return parsed.verdict
     except GithubException as exc:
         if not comments:
             raise
         print(f"::warning::Batch review failed, posting inline comments individually: {exc}")
         post_inline_comments(pr, valid_comments, commit_sha)
-        submit_with_approval_fallback(event, [])
+        submit_with_self_review_fallback(event, [])
 
     return parsed.verdict
 
