@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.2 — 2026-08-13
+
+### Fixed
+
+- **Review body rendered as a single line of `\n`** — some models copy the
+  prompt's JSON `\n` example as a second escape layer, so after `json.loads`
+  the overview still contains the two-character sequence backslash-n. GitHub
+  then shows a wall of `\n` instead of markdown. The parser now decodes leftover
+  `\n` / `\t` / `\r` in `overview` and inline comment bodies, and the prompt
+  now forbids double-escaping.
+
 ## v1.0.1 — 2026-08-06
 
 ### Fixed
