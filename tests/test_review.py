@@ -113,6 +113,15 @@ def test_approval_not_permitted_detects_self_approval_block():
     assert approval_not_permitted(exc)
 
 
+def test_approval_not_permitted_detects_self_request_changes_block():
+    exc = GithubException(
+        422,
+        {"message": "Unprocessable Entity", "errors": ["Review Can not request changes on your own pull request"]},
+    )
+
+    assert approval_not_permitted(exc)
+
+
 def test_resolve_commit_sha_prefers_event_payload():
     pr = MagicMock()
     pr.head.sha = "from-pr"
@@ -360,23 +369,20 @@ def test_post_pull_request_review_auto_approves_when_enabled(mock_gh):
     )
 
 
-def test_post_pull_request_review_falls_back_to_comment_when_approval_not_permitted(
+def test_post_pull_request_review_falls_back_to_issue_comment_when_approval_not_permitted(
     mock_gh, capsys
 ):
     pr = MagicMock()
     fake_commit = MagicMock()
     mock_gh.get_repo.return_value.get_commit.return_value = fake_commit
     parsed = ParsedReview(overview="Summary", verdict="APPROVE", inline_comments=[])
-    pr.create_review.side_effect = [
-        GithubException(
-            422,
-            {
-                "message": "Unprocessable Entity",
-                "errors": ["GitHub Actions is not permitted to approve pull requests."],
-            },
-        ),
-        None,
-    ]
+    pr.create_review.side_effect = GithubException(
+        422,
+        {
+            "message": "Unprocessable Entity",
+            "errors": ["GitHub Actions is not permitted to approve pull requests."],
+        },
+    )
 
     verdict = post_pull_request_review(
         pr,
@@ -389,9 +395,41 @@ def test_post_pull_request_review_falls_back_to_comment_when_approval_not_permit
     )
 
     assert verdict == "APPROVE"
-    assert pr.create_review.call_count == 2
-    assert pr.create_review.call_args_list[1].kwargs["event"] == "COMMENT"
-    assert "Cannot submit GitHub PR approval with this token" in capsys.readouterr().out
+    assert pr.create_review.call_count == 1
+    pr.create_issue_comment.assert_called_once()
+    assert "Blueprint Pudim Code Review" in pr.create_issue_comment.call_args[0][0]
+    assert "Cannot submit GitHub PR review with this token" in capsys.readouterr().out
+
+
+def test_post_pull_request_review_falls_back_to_issue_comment_when_request_changes_not_permitted(
+    mock_gh, capsys
+):
+    pr = MagicMock()
+    fake_commit = MagicMock()
+    mock_gh.get_repo.return_value.get_commit.return_value = fake_commit
+    parsed = ParsedReview(overview="Summary", verdict="CHANGES_REQUESTED", inline_comments=[])
+    pr.create_review.side_effect = GithubException(
+        422,
+        {
+            "message": "Unprocessable Entity",
+            "errors": ["Review Can not request changes on your own pull request"],
+        },
+    )
+
+    verdict = post_pull_request_review(
+        pr,
+        parsed,
+        "abc123",
+        mock_gh,
+        "luismr/some-repo",
+        [],
+    )
+
+    assert verdict == "CHANGES_REQUESTED"
+    assert pr.create_review.call_count == 1
+    pr.create_issue_comment.assert_called_once()
+    assert "Blueprint Pudim Code Review" in pr.create_issue_comment.call_args[0][0]
+    assert "Cannot submit GitHub PR review with this token" in capsys.readouterr().out
 
 
 def test_post_pull_request_review_falls_back_to_individual_comments(mock_gh, capsys):
