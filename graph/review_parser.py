@@ -48,6 +48,11 @@ def _extract_json(text: str) -> str:
     raise ValueError("No JSON object found")
 
 
+def _sanitize_json(text: str) -> str:
+    """Strip trailing commas that LLMs sometimes emit (invalid JSON)."""
+    return re.sub(r",\s*([}\]])", r"\1", text)
+
+
 def _parse_inline_comment(raw: object) -> InlineComment | None:
     if not isinstance(raw, dict):
         print(f"::warning::Skipping invalid inline comment: {raw}")
@@ -70,7 +75,7 @@ def _parse_inline_comment(raw: object) -> InlineComment | None:
 
 def parse_review_output(text: str) -> ParsedReview | None:
     try:
-        payload = json.loads(_extract_json(text))
+        payload = json.loads(_sanitize_json(_extract_json(text)))
     except (ValueError, json.JSONDecodeError):
         return None
 

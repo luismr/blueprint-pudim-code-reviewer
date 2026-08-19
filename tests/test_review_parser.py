@@ -105,6 +105,39 @@ def test_parse_review_output_from_fenced_json():
     assert parsed.inline_comments == []
 
 
+def test_parse_review_output_recovers_from_trailing_commas():
+    """Regression: LLMs sometimes emit trailing commas, which are invalid JSON.
+
+    The parser must sanitize them before calling json.loads so that a
+    well-structured review isn't silently discarded and posted as raw JSON.
+    """
+    raw = (
+        '{\n'
+        '  "overview": "## Summary\\nLooks good.",\n'
+        '  "verdict": "CHANGES_REQUESTED",\n'
+        '  "inline_comments": [\n'
+        '    {\n'
+        '      "path": "src/main.py",\n'
+        '      "line": 10,\n'
+        '      "body": "Fix this.",\n'  # trailing comma inside object
+        '    },\n'
+        '    {\n'
+        '      "path": "src/other.py",\n'
+        '      "line": 20,\n'
+        '      "body": "And this."\n'
+        '    }\n'
+        '  ]\n'
+        '}'
+    )
+
+    parsed = parse_review_output(raw)
+
+    assert parsed is not None
+    assert parsed.verdict == "CHANGES_REQUESTED"
+    assert "## Summary" in parsed.overview
+    assert len(parsed.inline_comments) == 2
+
+
 def test_parse_review_output_returns_none_for_invalid_json():
     assert parse_review_output("not json") is None
 
