@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.3 — 2026-08-19
+
+### Fixed
+
+- **Raw JSON posted as review comment when LLM emits trailing commas** — some
+  models occasionally append a trailing comma after the last field of an inline
+  comment object (e.g. `"body": "...",\n}`), which is invalid JSON and causes
+  `json.loads` to raise `JSONDecodeError`. `parse_review_output` then returns
+  `None` and the full raw JSON blob is posted as an issue comment instead of a
+  structured review. A `_sanitize_json` step now strips trailing commas before
+  parsing so well-formed reviews are never silently discarded.
+
 ## v1.0.2 — 2026-08-18
 
 ### Fixed
